@@ -1,0 +1,6 @@
+{
+  "name": "Global Crypto Capital Loan",
+  "description": "A premium global digital lending platform engineered for cryptocurrency or forex traders, investors, startups, and Web3 founders.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

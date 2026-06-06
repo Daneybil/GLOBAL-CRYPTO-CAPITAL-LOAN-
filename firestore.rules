@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper to validate alphanumeric IDs to prevent injection or corruption
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-+%]+$');
+    }
+
+    // Validation helper for user profile schema
+    function isValidUser(data) {
+      return data.keys().hasAll(['walletAddress', 'fullName', 'email'])
+        && data.walletAddress is string && data.walletAddress.size() >= 10 && data.walletAddress.size() <= 80
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 100;
+    }
+
+    // User Profile matching rule
+    match /users/{walletAddress} {
+      allow read: if isValidId(walletAddress);
+      allow create: if isValidId(walletAddress) && isValidUser(request.resource.data);
+      allow update: if isValidId(walletAddress) && isValidUser(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}

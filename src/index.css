@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;750;900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Outfit:wght@400;700;800;900&family=JetBrains+Mono:wght@450;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", "Outfit", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100%;
+    max-width: 100%;
+  }
+  body {
+    background-color: #02050f; /* Premium dark background */
+    background-image: 
+      linear-gradient(rgba(214, 182, 110, 0.015) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, rgba(214, 182, 110, 0.015) 1.5px, transparent 1.5px);
+    background-size: 80px 80px;
+    background-position: center top;
+    color: #cbd5e1; /* Elegant cool grey text */
+    font-weight: 500 !important;
+  }
+  h1, h2, h3, h4, h5, h6, .text-thick {
+    font-family: var(--font-display);
+    font-weight: 800 !important;
+    color: #ffffff;
+  }
+}

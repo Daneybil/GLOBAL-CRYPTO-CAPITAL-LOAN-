@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with KYC compliance details and active loan statuses indexed by wallet address",
+      "type": "object",
+      "properties": {
+        "walletAddress": { "type": "string", "description": "Hexadecimal public key of the connected Web3 wallet" },
+        "fullName": { "type": "string", "description": "Legal name of the user" },
+        "email": { "type": "string", "description": "Corporate email address" },
+        "dob": { "type": "string", "description": "Date of birth in YYYY-MM-DD" },
+        "phonePrefix": { "type": "string", "description": "Country dial prefix (e.g., +1)" },
+        "phoneNumber": { "type": "string", "description": "Local formatted phone number" },
+        "documentType": { "type": "string", "description": "Verified Government identification card type" },
+        "documentNumber": { "type": "string", "description": "Alphanumeric government document tracking ID" },
+        "addressLine": { "type": "string", "description": "Full physical residential address" },
+        "country": { "type": "string", "description": "Country of residency" },
+        "hometown": { "type": "string", "description": "Certified birthplace" },
+        "motherMaidenName": { "type": "string", "description": "Mother's civil name records" },
+        "fatherMaidenName": { "type": "string", "description": "Father's civil name records" },
+        "ssn": { "type": "string", "description": "US Social Security Number" },
+        "usaVisaNumber": { "type": "string", "description": "US Visa record ID" },
+        "bvn": { "type": "string", "description": "Nigerian 11-digit Bank Verification Number" },
+        "kycStatus": { "type": "string", "enum": ["none", "pending", "approved", "rejected"], "description": "Current legislative clearing status" },
+        "kycSubmittedAt": { "type": "string", "format": "date-time", "description": "Timestamp of application ledger write" },
+        "kycReviewedAt": { "type": "string", "format": "date-time", "description": "Timestamp of compliance review resolution" },
+        "collateralPaid": { "type": "boolean", "description": "Whether the 50% collateral plus 2% fee was paid to the escrow contract" },
+        "collateralAmountPaid": { "type": "number", "description": "Escrowed deposit volume in USD equivalent" },
+        "pledgedAsset": { "type": "string", "description": "Underlying asset locked (e.g., BTC)" },
+        "pledgedAmount": { "type": "number", "description": "Quantity of crypto token locked in escrow" },
+        "disbursedAsset": { "type": "string", "description": "The asset name they want their payout in" },
+        "loanAmount": { "type": "number", "description": "Released loan capital in USD" },
+        "loanDisbursed": { "type": "boolean", "description": "Whether payout was pushed to the user's wallet address" },
+        "loanDisbursedAt": { "type": "string", "format": "date-time", "description": "Disbursement oracle timestamp" },
+        "dueDate": { "type": "string", "description": "Loan repayment timeline due date string" },
+        "repaymentStatus": { "type": "string", "enum": ["unpaid", "paid"], "description": "Repayment completion index" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of document index generation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last update to this user record" }
+      },
+      "required": ["walletAddress", "fullName", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{walletAddress}": {
+      "schema": "UserProfile",
+      "description": "Secure storage directory mapping wallet addresses directly to KYC identity registries, collateral escrow, and dynamic credit status indices."
+    }
+  }
+}
