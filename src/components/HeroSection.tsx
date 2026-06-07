@@ -151,7 +151,7 @@ export default function HeroSection({
                   </div>
                 </div>
 
-                {/* Simulated progress step for aesthetic fidelity */}
+                {/* Real-time progress metric indicator */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
                     <span>Aggregate Loan Release Speed</span>

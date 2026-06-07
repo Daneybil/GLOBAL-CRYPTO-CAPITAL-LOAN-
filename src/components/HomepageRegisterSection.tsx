@@ -153,10 +153,6 @@ export default function HomepageRegisterSection({
     }, 1200);
   };
 
-  const getSimulatedAddressShort = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
   return (
     <section id="homepage-signup-anchor" className="py-20 bg-transparent border-t border-b border-sky-950/40 text-left relative overflow-hidden z-20">
       {/* Dynamic ambient background gradients */}

@@ -172,7 +172,7 @@ export default function MarketDataSection({
 
                 {/* Direct Action Link */}
                 <div className="mt-6 pt-4 border-t border-slate-900 flex justify-between items-center text-[10px] text-[#38bdf8] font-mono font-bold tracking-wider uppercase group-hover:text-white transition-colors">
-                  <span>Simulate in calculator</span>
+                  <span>Calculate Rates</span>
                   <span>→</span>
                 </div>
               </motion.div>

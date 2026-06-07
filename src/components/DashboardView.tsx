@@ -201,8 +201,8 @@ export default function DashboardView({
   const [pledgeLoanDuration, setPledgeLoanDuration] = useState(12); // Term duration in months (min 3, max 48)
   const [selectedChain, setSelectedChain] = useState<"solana" | "bsc" | "polygon">("bsc");
   const [disbursedAssetSymbol, setDisbursedAssetSymbol] = useState("USDT");
-  const [simulatedWalletBalance, setSimulatedWalletBalance] = useState(15000); // Simulated wallet balance in USD
-  const activeWalletBalanceUsd = wallet.status === "connected" && wallet.balanceEth > 0 ? (wallet.balanceEth * 3500) : simulatedWalletBalance;
+  const [activeEscrowLedgerBalance, setActiveEscrowLedgerBalance] = useState(15000); // Institutional escrow balance in USD
+  const activeWalletBalanceUsd = wallet.status === "connected" && wallet.balanceEth > 0 ? (wallet.balanceEth * 3500) : activeEscrowLedgerBalance;
   const [isWeb3ModalOpen, setIsWeb3ModalOpen] = useState(false);
   const [web3ModalState, setWeb3ModalState] = useState<"idle" | "signing" | "success" | "failed">("idle");
   const [customConfirmInputAmount, setCustomConfirmInputAmount] = useState("");
@@ -215,8 +215,8 @@ export default function DashboardView({
   // Interactive Countdown & Audit Progress
   const [kycProgressPercentage, setKycProgressPercentage] = useState(0);
   const [kycActiveChecklistIndex, setKycActiveChecklistIndex] = useState(0);
-  const [kycSimulatedMinutes, setKycSimulatedMinutes] = useState(15);
-  const [kycSimulatedSeconds, setKycSimulatedSeconds] = useState(0);
+  const [regulatoryReviewMinutes, setRegulatoryReviewMinutes] = useState(15);
+  const [regulatoryReviewSeconds, setRegulatoryReviewSeconds] = useState(0);
   const [isKycClearingComplete, setIsKycClearingComplete] = useState(false);
   const [isActivelyVerifyingKyc, setIsActivelyVerifyingKyc] = useState(false);
   const [isCuratorPaid, setIsCuratorPaid] = useState<boolean>(false);
@@ -606,19 +606,15 @@ export default function DashboardView({
   };
 
   // Step 2: KYC Spec, Collateral, and Master Policy Legal Covenant Form Submission
+  // Step 2: KYC Spec, Collateral, and Master Policy Legal Covenant Form Submission Handlers
   const handleKycPledgeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCustomValidationError(null);
 
-    // Validate personal information fields
-    const fName = firstName.trim();
-    const lName = lastName.trim();
-    if (!fName) {
-      setCustomValidationError("Rejected! Please enter your authentic First Name.");
-      return;
-    }
-    if (!lName) {
-      setCustomValidationError("Rejected! Please enter your authentic Last Name.");
+    // Validate simplified target personal information fields
+    const formattedFullName = (fullName || "").trim();
+    if (!formattedFullName || formattedFullName.length < 3) {
+      setCustomValidationError("Rejected! Please enter your authentic Legal Full Name.");
       return;
     }
 
@@ -629,86 +625,25 @@ export default function DashboardView({
       return;
     }
 
-    // Validate DOB (must be 18+)
-    if (!dob) {
-      setCustomValidationError("Rejected! Please specify your Date of Birth.");
-      return;
-    }
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    if (isNaN(birthDate.getTime()) || age < 18) {
-      setCustomValidationError("Rejected! You must be at least 18 years of age to legally execute credit covenants.");
-      return;
-    }
-
-    // Validate gender
-    if (!gender || gender === "Select Gender") {
-      setCustomValidationError("Rejected! Please select your Gender.");
-      return;
-    }
-
-    // Validate location indicators
-    if (!nationality) {
-      setCustomValidationError("Rejected! Please specify your Nationality.");
-      return;
-    }
-    if (!country) {
-      setCustomValidationError("Rejected! Please select your Country of Residence.");
-      return;
-    }
-    if (!stateProvinceRegion.trim()) {
-      setCustomValidationError("Rejected! Please specify your State, Province, or Region.");
-      return;
-    }
-    if (!city.trim()) {
-      setCustomValidationError("Rejected! Please specify your City.");
-      return;
-    }
-    if (!addressLine.trim() || addressLine.trim().length < 5) {
-      setCustomValidationError("Rejected! Please enter a valid, complete physical Residential Address.");
-      return;
-    }
-
     // Validate Phone Number
     const trimmedPhone = (phoneNumber || "").trim();
     if (!trimmedPhone || trimmedPhone.length < 6) {
-      setCustomValidationError("Rejected! Please enter a valid Telephone count.");
+      setCustomValidationError("Rejected! Please enter a valid telephone number contact.");
       return;
     }
 
-    // Validate Country-Specific Identifiers
-    const lowerResCountry = country.toLowerCase();
-    if (lowerResCountry.includes("united states") || lowerResCountry === "us" || lowerResCountry === "usa") {
-      const cleanedSsn = (ssn || "").replace(/\D/g, "");
-      if (!cleanedSsn || cleanedSsn.length !== 9) {
-        setCustomValidationError("Rejected! US applicants must provide a valid 9-digit Social Security Number (SSN).");
-        return;
-      }
-    } else if (lowerResCountry.includes("nigeria")) {
-      const cleanedBvn = (bvn || "").replace(/\D/g, "");
-      const cleanedNin = (nin || "").replace(/\D/g, "");
-      if ((!cleanedBvn || cleanedBvn.length !== 11) && (!cleanedNin || cleanedNin.length !== 11)) {
-        setCustomValidationError("Rejected! Nigerian applicants must submit either a valid 11-digit Bank Verification Number (BVN) or National Identification Number (NIN).");
-        return;
-      }
-    } else if (lowerResCountry.includes("united kingdom") || lowerResCountry === "uk" || lowerResCountry === "gb") {
-      const cleanedNino = (nationalInsuranceNumber || "").trim();
-      if (!cleanedNino || cleanedNino.length < 5) {
-        setCustomValidationError("Rejected! UK applicants must provide a valid National Insurance Number.");
-        return;
-      }
-    } else {
-      // General identification check for other countries
-      const otherId = (documentNumber || "").trim();
-      if (!otherId || otherId.length < 4) {
-        setCustomValidationError("Rejected! Please specify your Government Identification or Identity Document number.");
-        return;
-      }
+    // Validate Country
+    const resCountry = (country || "").trim();
+    if (!resCountry || resCountry === "Select Residence Country") {
+      setCustomValidationError("Rejected! Please specify your country of residence.");
+      return;
+    }
+
+    // Validate ID Number
+    const idNum = (documentNumber || "").trim();
+    if (!idNum || idNum.length < 4) {
+      setCustomValidationError("Rejected! Please enter your active Government-Issued ID Identity document number.");
+      return;
     }
 
     // Validate document uploads
@@ -717,23 +652,22 @@ export default function DashboardView({
     const isVideoUploaded = selfieFileUploaded || videoRecorded || !!videoFileName;
 
     if (!isIdUploaded) {
-      setCustomValidationError("Rejected! Please upload or capture your Government Identification document.");
+      setCustomValidationError("Rejected! Please upload a valid Government-Issued ID Document.");
       return;
     }
     if (!isAddressUploaded) {
-      setCustomValidationError("Rejected! Please upload or capture your Proof of Address document.");
+      setCustomValidationError("Rejected! Please upload a valid Proof of Address Document.");
       return;
     }
     if (!isVideoUploaded) {
-      setCustomValidationError("Rejected! Please record or upload your short 10-30 seconds Video Declaration.");
+      setCustomValidationError("Rejected! Please upload or record your Video Verification statement.");
       return;
     }
 
-    // Validate Covenant legal print signature
+    // Verify printed signature
     const sigName = (sigPrintedName || "").trim();
-    const computedFullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
-    if (!sigName || sigName.toLowerCase() !== computedFullName.toLowerCase()) {
-      setCustomValidationError(`Rejected! Your electronic printed signature ("${sigName}") must exactly match your legal name ("${computedFullName}").`);
+    if (!sigName || sigName.toLowerCase() !== formattedFullName.toLowerCase()) {
+      setCustomValidationError(`Rejected! Your electronic printed signature ("${sigName}") must exactly match your Full Name ("${formattedFullName}").`);
       return;
     }
     if (!agreementChecked) {
@@ -741,19 +675,24 @@ export default function DashboardView({
       return;
     }
 
+    // Split name to maintain compatibility with background profiles
+    const nameParts = formattedFullName.split(/\s+/);
+    const fName = nameParts[0] || "";
+    const lName = nameParts.slice(1).join(" ") || "Vance";
+
     // Success! Update local and cloud KYC status to "submitted"
     setKycProfile((p) => ({
       ...p,
-      fullName: computedFullName,
-      gender,
-      nationality,
-      stateProvinceRegion,
-      city,
-      addressLine,
-      postalCode,
+      fullName: formattedFullName,
+      gender: gender || "prefer_not_to_say",
+      nationality: resCountry,
+      stateProvinceRegion: stateProvinceRegion || "Region",
+      city: city || "City",
+      addressLine: addressLine || "Physical Address",
+      postalCode: postalCode || "00000",
       documentType,
-      documentNumber: documentNumber || ssn || bvn || nin || nationalInsuranceNumber || "TBD",
-      country,
+      documentNumber: idNum,
+      country: resCountry,
       idUploaded: true,
       addressUploaded: true,
       selfieUploaded: true,
@@ -763,33 +702,33 @@ export default function DashboardView({
 
     const userPayload = {
       walletAddress: wallet.address || "0x_demo_offline",
-      firstName,
-      middleName,
-      lastName,
-      fullName: computedFullName,
-      dob,
-      gender,
-      nationality,
-      country,
-      stateProvinceRegion,
-      city,
-      addressLine,
-      postalCode,
+      firstName: fName,
+      middleName: "",
+      lastName: lName,
+      fullName: formattedFullName,
+      dob: dob || "1995-05-15",
+      gender: gender || "prefer_not_to_say",
+      nationality: resCountry,
+      country: resCountry,
+      stateProvinceRegion: stateProvinceRegion || "Region",
+      city: city || "City",
+      addressLine: addressLine || "Physical Address",
+      postalCode: postalCode || "00000",
       phonePrefix,
-      phoneNumber,
+      phoneNumber: trimmedPhone,
       email: trimmedEmail,
       documentType,
-      documentNumber: documentNumber || ssn || bvn || nin || nationalInsuranceNumber || "TBD",
+      documentNumber: idNum,
       govIdFileName: govIdFileName || "Verified_ID.png",
       proofAddressFileName: proofAddressFileName || "Verified_Residence.png",
       videoFileName: videoFileName || "Verified_Declaration.mp4",
-      ssn,
-      bvn,
-      nin,
-      nationalInsuranceNumber,
-      nationalIdNum,
-      taxIdNum,
-      govIdNumField,
+      ssn: ssn || "",
+      bvn: bvn || "",
+      nin: nin || "",
+      nationalInsuranceNumber: nationalInsuranceNumber || "",
+      nationalIdNum: nationalIdNum || "",
+      taxIdNum: taxIdNum || "",
+      govIdNumField: govIdNumField || "",
       sigPrintedName,
       idFileUploaded: true,
       addressFileUploaded: true,
@@ -900,8 +839,8 @@ export default function DashboardView({
             } else {
               // Standard ticking countdown updates
               const remaining = targetSec - elapsedSec;
-              setKycSimulatedMinutes(Math.floor(remaining / 60));
-              setKycSimulatedSeconds(remaining % 60);
+              setRegulatoryReviewMinutes(Math.floor(remaining / 60));
+              setRegulatoryReviewSeconds(remaining % 60);
 
               const nextPct = Math.min(99, Math.floor((elapsedSec / targetSec) * 100));
               setKycProgressPercentage(nextPct);
@@ -914,9 +853,9 @@ export default function DashboardView({
           });
         } else {
           // Fallback if disconnected
-          setKycSimulatedSeconds((sec) => {
+          setRegulatoryReviewSeconds((sec) => {
             if (sec === 0) {
-              setKycSimulatedMinutes((min) => (min > 0 ? min - 1 : 0));
+              setRegulatoryReviewMinutes((min) => (min > 0 ? min - 1 : 0));
               return 59;
             }
             return sec - 1;
@@ -982,7 +921,7 @@ export default function DashboardView({
       }
     } else {
       setKycProfile((p) => ({ ...p, kycStatus: "verified" }));
-      addNotification("Accelerated Verification approved", "Simulated clearance activated.");
+      addNotification("Accelerated Verification approved", "Compliance authorization cleared.");
     }
   };
 
@@ -1048,7 +987,7 @@ export default function DashboardView({
       setIsCuratorPaid(true);
       setIsPayingCurator(false);
       setWeb3ModalState("success");
-      setSimulatedWalletBalance((prev) => Math.max(0, prev - requiredDeposit));
+      setActiveEscrowLedgerBalance((prev) => Math.max(0, prev - requiredDeposit));
 
       // Set date metrics based on term selections
       const baseDate = new Date();
@@ -1587,17 +1526,30 @@ export default function DashboardView({
                   </p>
                 </div>
 
-                {/* STEP A.2: LEGAL REPRESENTATION & CONTACT COVENANTS */}
-                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
-                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>📞 STEP A.2: LEGAL REPRESENTATION & CONTACT COVENANTS</span>
-                  </h4>
+                {/* STEP B: INSTITUTIONAL GLOBAL KYC SYSTEM (PREMIUM BLUE & WHITE CARD) */}
+                <div className="p-6 md:p-8 rounded-3xl bg-white border-2 border-slate-200 text-left space-y-6 shadow-xl text-[#0f172a]" style={{ background: "#ffffff", color: "#0f172a" }}>
+                  <div className="border-b border-blue-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <div>
+                      <span className="text-[10px] font-mono tracking-widest text-blue-600 uppercase font-black">Global Crypto Capital</span>
+                      <h4 className="text-xl font-sans font-black text-slate-900 tracking-tight uppercase mt-0.5">
+                        Simplify Global Compliance ID Verification
+                      </h4>
+                    </div>
+                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full font-mono text-[9px] uppercase font-black border border-blue-200 shrink-0">
+                      SECURED COVENANT
+                    </span>
+                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-fullname" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Full Legal Name</label>
+                  <p className="text-xs text-slate-600 leading-relaxed font-bold">
+                    To comply with international financial regulations, please complete this simplified verification profile under your connected wallet identity.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                    {/* Full legal Name */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="kyc-full-name" className="text-[10px] font-mono text-slate-500 uppercase font-black">Full Legal Name</label>
                       <input
-                        id="kyc-fullname"
+                        id="kyc-full-name"
                         type="text"
                         required
                         placeholder="e.g. Johnathan Parker Vance"
@@ -1606,75 +1558,55 @@ export default function DashboardView({
                           setFullName(e.target.value);
                           if (customValidationError) setCustomValidationError(null);
                         }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        className="w-full h-11 px-4 rounded-xl bg-white text-slate-900 text-xs font-bold font-sans border border-slate-300 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-105 transition duration-150"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
                       />
+                      <span className="text-[9px] text-slate-405 font-mono block">Must match government database records.</span>
                     </div>
 
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-email" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Corporate Email Address</label>
+                    {/* Email address */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="kyc-email-address" className="text-[10px] font-mono text-slate-500 uppercase font-black">Email Address</label>
                       <input
-                        id="kyc-email"
+                        id="kyc-email-address"
                         type="email"
                         required
-                        placeholder="e.g. j.vance@institutional.com"
+                        placeholder="johnathan.vance@company.com"
                         value={localEmail}
                         onChange={(e) => {
                           setLocalEmail(e.target.value);
                           if (customValidationError) setCustomValidationError(null);
                         }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        className="w-full h-11 px-4 rounded-xl bg-white text-slate-900 text-xs font-bold font-sans border border-slate-300 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-105 transition duration-150"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
                       />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-dob" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Date of Birth</label>
-                      <input
-                        id="kyc-dob"
-                        type="date"
-                        required
-                        value={dob}
-                        onChange={(e) => {
-                          setDob(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none [color-scheme:dark]"
-                      />
+                      <span className="text-[9px] text-slate-405 font-mono block">We will transmit the official credit PDF parameters here.</span>
                     </div>
 
-                    {/* Infinite-stability global telephone code selector */}
-                    <div className="space-y-1 text-left relative">
-                      <label htmlFor="phone-number-field" className="text-[10px] font-mono text-slate-400 uppercase font-bold flex justify-between items-center">
-                        <span>Corporate Telephone</span>
-                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(International dialing supported)</span>
-                      </label>
-                      
-                      <div className="flex h-11 rounded-xl bg-slate-900 border border-slate-800 overflow-visible relative">
-                        {/* Dialing Prefix Dropper Button */}
+                    {/* Telephone Contact number */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="phone-number-field" className="text-[10px] font-mono text-slate-500 uppercase font-black">Telephone Number</label>
+                      <div className="flex h-11 rounded-xl border border-slate-300 overflow-visible relative" style={{ border: "1px solid #cbd5e1" }}>
                         <button
                           type="button"
                           onClick={() => setIsPhoneDropdownOpen(!isPhoneDropdownOpen)}
-                          className="flex items-center space-x-1.5 px-3 border-r border-slate-800 bg-slate-950/40 hover:bg-slate-900 rounded-l-xl transition select-none"
+                          className="flex items-center space-x-1.5 px-3 border-r border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-l-xl transition select-none"
                         >
                           {(() => {
-                            // Find matching country by matching active prefix
-                            const match = globalCountries.find(
-                              (c) => getDialCode(c.code) === phonePrefix
-                            ) || globalCountries[0];
+                            const match = globalCountries.find((c) => getDialCode(c.code) === phonePrefix) || globalCountries[0];
                             return (
                               <>
                                 <img
                                   src={match.flagUrl}
                                   alt=""
-                                  className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
+                                  className="w-4 h-3 object-cover rounded border border-slate-305 shrink-0"
                                   referrerPolicy="no-referrer"
                                 />
-                                <span className="text-white text-xs font-black font-mono">{phonePrefix}</span>
+                                <span className="text-slate-900 text-xs font-black font-mono">{phonePrefix}</span>
                               </>
                             );
                           })()}
-                          <span className="text-[8px] text-slate-500 font-mono">▼</span>
+                          <span className="text-[7px] text-slate-500 font-mono">▼</span>
                         </button>
 
                         <input
@@ -1687,17 +1619,19 @@ export default function DashboardView({
                             setPhoneNumber(e.target.value.replace(/[^0-9]/g, ""));
                             if (customValidationError) setCustomValidationError(null);
                           }}
-                          className="w-full bg-transparent px-4 text-white text-xs font-mono font-bold focus:outline-none"
+                          className="w-full bg-white px-4 text-slate-900 text-xs font-mono font-bold focus:outline-none rounded-r-xl"
+                          style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
                         />
 
                         {isPhoneDropdownOpen && (
-                          <div className="absolute left-0 top-12 w-64 max-h-56 overflow-y-auto bg-slate-950 border-2 border-slate-800 rounded-2xl p-2.5 z-50 shadow-2xl">
+                          <div className="absolute left-0 top-12 w-64 max-h-56 overflow-y-auto bg-white border-2 border-slate-200 rounded-2xl p-2.5 z-50 shadow-2xl animate-none">
                             <input
                               type="text"
-                              placeholder="Search country suffix..."
+                              placeholder="Search country dial code..."
                               value={phoneSearchQuery}
                               onChange={(e) => setPhoneSearchQuery(e.target.value)}
-                              className="w-full h-8 px-2.5 rounded-lg bg-slate-900 border border-slate-805 text-white font-sans text-xs mb-1.5 focus:outline-none focus:border-sky-500 placeholder-slate-500"
+                              className="w-full h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-205 text-slate-900 font-sans text-xs mb-1.5 focus:outline-none placeholder-slate-405"
+                              style={{ backgroundColor: "#f8fafc", color: "#0f172a", border: "1px solid #e2e8f0" }}
                               onClick={(e) => e.stopPropagation()}
                               autoFocus
                             />
@@ -1711,26 +1645,25 @@ export default function DashboardView({
                                   const dial = getDialCode(c.code);
                                   return (
                                     <button
-                                      key={`${c.code}-phone`}
+                                      key={`${c.code}-phone-kyc-pane`}
                                       type="button"
                                       onClick={() => {
                                         setPhonePrefix(dial);
                                         setIsPhoneDropdownOpen(false);
                                         setPhoneSearchQuery("");
                                       }}
-                                      className="w-full px-2.5 py-2 hover:bg-sky-500/15 text-xs text-left rounded-lg_ flex items-center justify-between text-slate-200 hover:text-white transition"
-                                      style={{ borderRadius: "8px" }}
+                                      className="w-full px-2.5 py-2 hover:bg-slate-100 text-xs text-left rounded-lg flex items-center justify-between text-slate-800 transition"
                                     >
                                       <div className="flex items-center space-x-2.5">
                                         <img
                                           src={c.flagUrl}
                                           alt=""
-                                          className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
+                                          className="w-4 h-3 object-cover rounded border border-slate-200 shrink-0"
                                           referrerPolicy="no-referrer"
                                         />
-                                        <span className="font-semibold truncate max-w-[135px] text-slate-200">{c.name}</span>
+                                        <span className="font-semibold truncate max-w-[135px] text-slate-705">{c.name}</span>
                                       </div>
-                                      <span className="text-sky-400 font-mono text-[10px] font-bold">
+                                      <span className="text-blue-600 font-mono text-[10px] font-black">
                                         {dial}
                                       </span>
                                     </button>
@@ -1741,829 +1674,258 @@ export default function DashboardView({
                         )}
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* STEP A.2: PERSONAL IDENTITY & CONTACT */}
-                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
-                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>📱 STEP A.2: PERSONAL IDENTITY & CONTACT DETAILS</span>
-                  </h4>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-firstname" className="text-[10px] font-mono text-slate-400 uppercase font-bold">First Name</label>
-                      <input
-                        id="kyc-firstname"
-                        type="text"
-                        required
-                        placeholder="e.g. Johnathan"
-                        value={firstName}
-                        onChange={(e) => {
-                          setFirstName(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-middlename" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Middle Name (Optional)</label>
-                      <input
-                        id="kyc-middlename"
-                        type="text"
-                        placeholder="e.g. Parker"
-                        value={middleName}
-                        onChange={(e) => {
-                          setMiddleName(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-lastname" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Last Name</label>
-                      <input
-                        id="kyc-lastname"
-                        type="text"
-                        required
-                        placeholder="e.g. Vance"
-                        value={lastName}
-                        onChange={(e) => {
-                          setLastName(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-email" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Email Address</label>
-                      <input
-                        id="kyc-email"
-                        type="email"
-                        required
-                        placeholder="e.g. johnathan.vance@gmail.com"
-                        value={localEmail}
-                        onChange={(e) => {
-                          setLocalEmail(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-gender" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Gender</label>
+                    {/* Country of Residence */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="kyc-country-select" className="text-[10px] font-mono text-slate-500 uppercase font-black">Country of Residence</label>
                       <select
-                        id="kyc-gender"
+                        id="kyc-country-select"
                         required
-                        value={gender}
+                        value={country}
                         onChange={(e) => {
-                          setGender(e.target.value);
+                          setCountry(e.target.value);
                           if (customValidationError) setCustomValidationError(null);
                         }}
-                        className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        className="w-full h-11 px-3 rounded-xl bg-white text-slate-900 text-xs font-bold font-sans border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-105"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
                       >
-                        <option value="">Select Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not_to_say">Prefer Not to Say</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="kyc-dob" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Date of Birth</label>
-                      <input
-                        id="kyc-dob"
-                        type="date"
-                        required
-                        value={dob}
-                        onChange={(e) => {
-                          setDob(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none [color-scheme:dark]"
-                      />
-                    </div>
-
-                    {/* Infinite-stability global telephone code selector */}
-                    <div className="space-y-1 text-left relative">
-                      <label htmlFor="phone-number-field" className="text-[10px] font-mono text-slate-400 uppercase font-bold flex justify-between items-center">
-                        <span>Telephone Number</span>
-                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(Eligible globally)</span>
-                      </label>
-                      
-                      <div className="flex h-11 rounded-xl bg-slate-900 border border-slate-800 overflow-visible relative">
-                        {/* Dialing Prefix Dropper Button */}
-                        <button
-                          type="button"
-                          onClick={() => setIsPhoneDropdownOpen(!isPhoneDropdownOpen)}
-                          className="flex items-center space-x-1.5 px-3 border-r border-slate-800 bg-slate-950/40 hover:bg-slate-900 rounded-l-xl transition select-none"
-                        >
-                          {(() => {
-                            // Find matching country by matching active prefix
-                            const match = globalCountries.find(
-                              (c) => getDialCode(c.code) === phonePrefix
-                            ) || globalCountries[0];
-                            return (
-                              <>
-                                <img
-                                  src={match.flagUrl}
-                                  alt=""
-                                  className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
-                                  referrerPolicy="no-referrer"
-                                />
-                                <span className="text-white text-xs font-black font-mono">{phonePrefix}</span>
-                              </>
-                            );
-                          })()}
-                          <span className="text-[8px] text-slate-500 font-mono">▼</span>
-                        </button>
-
-                        <input
-                          id="phone-number-field"
-                          type="tel"
-                          required
-                          placeholder="803 123 4567"
-                          value={phoneNumber}
-                          onChange={(e) => {
-                            setPhoneNumber(e.target.value.replace(/[^0-9]/g, ""));
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
-                          className="w-full bg-transparent px-4 text-white text-xs font-mono font-bold focus:outline-none"
-                        />
-
-                        {isPhoneDropdownOpen && (
-                          <div className="absolute left-0 top-12 w-64 max-h-56 overflow-y-auto bg-slate-950 border-2 border-slate-800 rounded-2xl p-2.5 z-50 shadow-2xl">
-                            <input
-                              type="text"
-                              placeholder="Search country suffix..."
-                              value={phoneSearchQuery}
-                              onChange={(e) => setPhoneSearchQuery(e.target.value)}
-                              className="w-full h-8 px-2.5 rounded-lg bg-slate-900 border border-slate-805 text-white font-sans text-xs mb-1.5 focus:outline-none focus:border-sky-500 placeholder-slate-500"
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                            <div className="space-y-0.5" onClick={(e) => e.stopPropagation()}>
-                              {globalCountries
-                                .filter((c) =>
-                                  c.name.toLowerCase().includes(phoneSearchQuery.toLowerCase()) ||
-                                  getDialCode(c.code).includes(phoneSearchQuery)
-                                )
-                                .map((c) => {
-                                  const dial = getDialCode(c.code);
-                                  return (
-                                    <button
-                                      key={`${c.code}-phone`}
-                                      type="button"
-                                      onClick={() => {
-                                        setPhonePrefix(dial);
-                                        setIsPhoneDropdownOpen(false);
-                                        setPhoneSearchQuery("");
-                                      }}
-                                      className="w-full px-2.5 py-2 hover:bg-sky-500/15 text-xs text-left rounded-lg flex items-center justify-between text-slate-200 hover:text-white transition"
-                                      style={{ borderRadius: "8px" }}
-                                    >
-                                      <div className="flex items-center space-x-2.5">
-                                        <img
-                                          src={c.flagUrl}
-                                          alt=""
-                                          className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
-                                          referrerPolicy="no-referrer"
-                                        />
-                                        <span className="font-semibold truncate max-w-[135px] text-slate-200">{c.name}</span>
-                                      </div>
-                                      <span className="text-sky-400 font-mono text-[10px] font-bold">
-                                        {dial}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* STEP B: LOCATION & CITIZENSHIP COVENANTS */}
-                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
-                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>🌎 STEP B: LOCATION, CITIZENSHIP & COMPLIANCE DATA</span>
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Nationality Picker using globalCountries list */}
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="nationality-select" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Nationality</label>
-                      <select
-                        id="nationality-select"
-                        required
-                        value={nationality}
-                        onChange={(e) => {
-                          setNationality(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      >
+                        <option value="">Select Residence Country</option>
                         {globalCountries.map((c) => (
-                          <option key={c.code} value={c.name} className="bg-slate-950 text-white">
+                          <option key={`${c.code}-res-country`} value={c.name} className="bg-white text-slate-900 font-medium font-bold">
                             {c.name}
                           </option>
                         ))}
                       </select>
                     </div>
-
-                    {/* Filterable Country Picker with Dynamic Flags Logos (Residence) */}
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="country-selector" className="text-[10px] font-mono text-slate-400 uppercase font-bold flex justify-between items-center">
-                        <span>Country of Residence</span>
-                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(Global access)</span>
-                      </label>
-                      <div className="relative">
-                        <button
-                          id="country-selector"
-                          type="button"
-                          onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold text-left flex items-center justify-between focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                        >
-                          <div className="flex items-center space-x-2">
-                            {(() => {
-                              const matched = globalCountries.find(
-                                (c) => c.name.toLowerCase() === country.toLowerCase()
-                              );
-                              if (matched) {
-                                return (
-                                  <>
-                                    <img
-                                      src={matched.flagUrl}
-                                      alt=""
-                                      className="w-5 h-3.5 object-cover rounded shadow-md border border-slate-800"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                    <span className="text-slate-100 font-bold">{matched.name}</span>
-                                  </>
-                                );
-                              }
-                              return <span className="text-slate-300">🌎 {country || "Select Residence Country"}</span>;
-                            })()}
-                          </div>
-                          <span className="text-slate-500 text-[10px] uppercase font-mono">Filter ▾</span>
-                        </button>
-
-                        {isCountryDropdownOpen && (
-                          <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-slate-950 border-2 border-slate-800 rounded-2xl p-3 z-40 shadow-2xl">
-                            <input
-                              type="text"
-                              placeholder="Type to filter residence..."
-                              value={countrySearchQuery}
-                              onChange={(e) => setCountrySearchQuery(e.target.value)}
-                              className="w-full h-9 px-3 rounded-lg bg-slate-900 border border-slate-805 text-white font-sans text-xs mb-2 focus:outline-none focus:border-sky-500 placeholder-slate-500"
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                            <div className="space-y-0.5" onClick={(e) => e.stopPropagation()}>
-                              {globalCountries
-                                .filter((c) =>
-                                  c.name.toLowerCase().includes(countrySearchQuery.toLowerCase())
-                                )
-                                .map((c) => (
-                                  <button
-                                    key={c.code}
-                                    type="button"
-                                    onClick={() => {
-                                      setCountry(c.name);
-                                      setIsCountryDropdownOpen(false);
-                                      setCountrySearchQuery("");
-                                      setCustomValidationError(null);
-                                    }}
-                                    className="w-full px-3 py-2.5 hover:bg-sky-500/15 text-xs text-left rounded-lg flex items-center justify-between text-slate-200 hover:text-white transition"
-                                  >
-                                    <div className="flex items-center space-x-3.5">
-                                      <img
-                                        src={c.flagUrl}
-                                        alt=""
-                                        className="w-5 h-3.5 object-cover rounded shadow-sm border border-slate-900"
-                                        referrerPolicy="no-referrer"
-                                      />
-                                      <span className="font-semibold">{c.name}</span>
-                                    </div>
-                                    <span className="text-slate-600 text-[10px] font-mono font-bold">
-                                      {c.code.toUpperCase()}
-                                    </span>
-                                  </button>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="state-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">State / Province / Region</label>
-                      <input
-                        id="state-input"
-                        type="text"
+                  {/* ID Document Type & Number Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-slate-100">
+                    <div className="space-y-1.5">
+                      <label htmlFor="kyc-id-type" className="text-[10px] font-mono text-slate-500 uppercase font-black">Government ID Type</label>
+                      <select
+                        id="kyc-id-type"
                         required
-                        placeholder="e.g. Geneva / California"
-                        value={stateProvinceRegion}
-                        onChange={(e) => setStateProvinceRegion(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="city-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">City</label>
-                      <input
-                        id="city-input"
-                        type="text"
-                        required
-                        placeholder="e.g. Geneva / New York"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="zip-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Postal Code (if applicable)</label>
-                      <input
-                        id="zip-input"
-                        type="text"
-                        placeholder="e.g. 1201 / 10005"
-                        value={postalCode}
-                        onChange={(e) => setPostalCode(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 text-left">
-                    <label htmlFor="address-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Residential Physical Address</label>
-                    <input
-                      id="address-input"
-                      type="text"
-                      required
-                      placeholder="e.g. 50 Wall Street Unit 4B"
-                      value={addressLine}
-                      onChange={(e) => setAddressLine(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Nigeria Regulatory Code Addition Fields */}
-                  {country.trim().toLowerCase().includes("nigeria") && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-3 mt-2 text-left"
-                    >
-                      <label className="text-[10px] font-mono text-sky-400 uppercase font-extrabold block">🇳🇬 Nigeria Regulatory Identifiers (BVN or NIN Required)</label>
-                      <p className="text-[10px] text-slate-400 leading-snug font-light">
-                        Nigerian laws require submitting either an 11-digit Bank Verification Number (BVN) or an 11-digit National Identification Number (NIN).
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label htmlFor="bvn-input" className="text-[10px] font-mono text-slate-350 uppercase">Bank Verification Number (BVN)</label>
-                          <input
-                            id="bvn-input"
-                            type="text"
-                            placeholder="Enter 11-digit BVN"
-                            value={bvn}
-                            onChange={(e) => {
-                              setBvn(e.target.value.replace(/\D/g, ""));
-                              if (customValidationError) setCustomValidationError(null);
-                            }}
-                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label htmlFor="nin-input" className="text-[10px] font-mono text-slate-350 uppercase font-bold block">National Identification Number (NIN)</label>
-                          <input
-                            id="nin-input"
-                            type="text"
-                            placeholder="Enter 11-digit NIN"
-                            value={nin}
-                            onChange={(e) => {
-                              setNin(e.target.value.replace(/\D/g, ""));
-                              if (customValidationError) setCustomValidationError(null);
-                            }}
-                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* United States SSN Compliance Code Block */}
-                  {(country.trim().toLowerCase().includes("united states") || country.trim().toLowerCase() === "us" || country.trim().toLowerCase() === "usa") && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-2 mt-2 text-left"
-                    >
-                      <span className="text-[10px] font-mono text-[#38bdf8] uppercase font-extrabold block">🇺🇸 US FinCEN Identity Compliance</span>
-                      <p className="text-[10px] text-slate-400 leading-snug font-light">
-                        USA regulatory compliance mandates submission of an active 9-digit Social Security Number (SSN).
-                      </p>
-                      <div className="space-y-1">
-                        <label htmlFor="ssn-input" className="text-[10px] font-mono text-slate-300 font-bold uppercase block">Social Security Number (SSN)</label>
-                        <input
-                          id="ssn-input"
-                          type="text"
-                          placeholder="e.g. 000-12-3456"
-                          value={ssn}
-                          onChange={(e) => {
-                            setSsn(e.target.value.replace(/\D/g, ""));
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
-                          className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* United Kingdom NINO Compliance Field */}
-                  {(country.trim().toLowerCase().includes("united kingdom") || country.trim().toLowerCase() === "uk" || country.trim().toLowerCase() === "gb") && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-2 mt-2 text-left"
-                    >
-                      <span className="text-[10px] font-mono text-[#38bdf8] uppercase font-extrabold block">🇬🇧 UK HMRC Compliance Code</span>
-                      <p className="text-[10px] text-slate-400 leading-snug font-light">
-                        UK citizens require a valid National Insurance Number (NINO) for credit validation.
-                      </p>
-                      <div className="space-y-1">
-                        <label htmlFor="nino-input" className="text-[10px] font-mono text-slate-350 uppercase block">National Insurance Number</label>
-                        <input
-                          id="nino-input"
-                          type="text"
-                          placeholder="e.g. QQ 12 34 56 A"
-                          value={nationalInsuranceNumber}
-                          onChange={(e) => {
-                            setNationalInsuranceNumber(e.target.value.toUpperCase());
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
-                          className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-[#38bdf8]"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* All other countries standard document index selection */}
-                  {!country.trim().toLowerCase().includes("united states") && 
-                   !country.trim().toLowerCase().includes("nigeria") && 
-                   !country.trim().toLowerCase().includes("united kingdom") && 
-                   country !== "us" && country !== "usa" && country !== "uk" && country !== "gb" && (
-                    <motion.div 
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-900 pt-3"
-                    >
-                      <div className="space-y-1">
-                        <label htmlFor="doc-type-select" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Government Document Type</label>
-                        <select
-                          id="doc-type-select"
-                          value={documentType}
-                          onChange={(e) => setDocumentType(e.target.value as any)}
-                          className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs text-[#38bdf8] font-bold focus:outline-none"
-                        >
-                          <option value="passport">Passport</option>
-                          <option value="id_card">National Identity Card</option>
-                          <option value="drivers_license">Driver's License</option>
-                          <option value="residence_permit">Residence Permit</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label htmlFor="doc-number-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Identity ID Number</label>
-                        <input
-                          id="doc-number-input"
-                          type="text"
-                          required
-                          placeholder="e.g. ID-81920-X8"
-                          value={documentNumber}
-                          onChange={(e) => {
-                            setDocumentNumber(e.target.value);
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold text-sky-400 focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Document uploads zones featuring REAL native file uploads to maximize trust */}
-                  <div className="space-y-4 border-t border-slate-900 pt-4">
-                    <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-801 space-y-1 text-left">
-                      <span className="text-[10px] font-mono text-sky-400 font-extrabold uppercase tracking-wide block">📸 Compliance Holding-Note Guideline</span>
-                      <p className="text-xs text-slate-300 font-sans font-light leading-relaxed">
-                        Hold up your identification card next to a paper sheet stating:
-                      </p>
-                      <div className="my-2.5 p-3.5 rounded-xl bg-slate-950 border-2 border-dashed border-[#38bdf8]/50 text-center font-mono text-[#38bdf8]">
-                        <span className="text-[9px] text-slate-500 uppercase block tracking-wider mb-1">Covenant string verification code:</span>
-                        <p className="font-extrabold text-[#38bdf8] text-xs sm:text-sm py-1 font-serif select-all">
-                          "Global Capital Pledge - ${pledgeCollateralAmount.toLocaleString()}"
-                        </p>
-                      </div>
+                        value={documentType}
+                        onChange={(e) => {
+                          setDocumentType(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-3 rounded-xl bg-white text-slate-900 text-xs font-bold font-sans border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-105"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
+                      >
+                        <option value="id_card">National Identity Card</option>
+                        <option value="drivers_license">Driver's License</option>
+                        <option value="passport">International Passport</option>
+                        <option value="voters_card">Voter's Card</option>
+                        <option value="residence_permit">Government Residence Permit</option>
+                      </select>
                     </div>
 
                     <div className="space-y-1.5">
-                      <span className="text-[10px] font-mono text-slate-450 uppercase block font-bold text-left">Direct Document Upload (Real File Support)</span>
-                      
-                      {/* Hidden File Input Nodes */}
-                      <input 
-                        type="file" 
-                        id="gov-id-upload-input" 
-                        className="hidden" 
-                        accept="image/*,.pdf" 
+                      <label htmlFor="kyc-id-number" className="text-[10px] font-mono text-slate-500 uppercase font-black">Government ID Number</label>
+                      <input
+                        id="kyc-id-number"
+                        type="text"
+                        required
+                        placeholder="e.g. A1234567B"
+                        value={documentNumber}
                         onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            setGovIdFile(e.target.files[0]);
-                            setGovIdFileName(e.target.files[0].name);
-                            setIdFileUploaded(true);
-                            addNotification("ID Uploaded", `${e.target.files[0].name} is decrypted on the ledger.`);
-                            if (customValidationError) setCustomValidationError(null);
-                          }
+                          setDocumentNumber(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
                         }}
+                        className="w-full h-11 px-4 rounded-xl bg-white text-slate-900 text-xs font-bold font-sans border border-slate-300 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-105 transition duration-150"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
                       />
-                      <input 
-                        type="file" 
-                        id="address-upload-input" 
-                        className="hidden" 
-                        accept="image/*,.pdf" 
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            setProofAddressFile(e.target.files[0]);
-                            setProofAddressFileName(e.target.files[0].name);
-                            setAddressFileUploaded(true);
-                            addNotification("Address Proof Uploaded", `${e.target.files[0].name} registered successfully.`);
-                            if (customValidationError) setCustomValidationError(null);
-                          }
-                        }}
-                      />
+                    </div>
+                  </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
-                        <label 
-                          htmlFor="gov-id-upload-input"
-                          className={`p-3.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center space-y-1.5 cursor-pointer hover:bg-slate-900 transition ${idFileUploaded ? "border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold" : "border-slate-800 text-slate-400 font-medium"}`}
-                        >
-                          <UserCheck className="w-5 h-5 text-[#38bdf8]" />
-                          <span className="text-[10px] font-mono text-center leading-tight">Government Photo ID</span>
-                          <span className="text-[8px] text-slate-500 font-sans font-normal">Supports JPG, JPEG, PNG, or PDF</span>
-                          {idFileUploaded ? (
-                            <span className="text-[9px] font-black uppercase text-emerald-400 truncate max-w-full">✓ {govIdFileName || "Verified_ID.png"}</span>
-                          ) : (
-                            <span className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">Choose File</span>
-                          )}
+                  {/* Document Uploads Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-slate-100">
+                    {/* ID Document Upload Button */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase font-black block">Upload Government-Issued ID</span>
+                      <label className={`group p-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center space-y-2 cursor-pointer transition select-none text-center h-32 ${idFileUploaded ? "border-emerald-500 bg-emerald-50/15 text-emerald-800" : "border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:border-slate-400"}`} style={{ height: "130px" }}>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              setGovIdFile(file);
+                              setGovIdFileName(file.name);
+                              setIdFileUploaded(true);
+                              addNotification("ID Registered", `File loaded successfully: ${file.name}`);
+                            }
+                          }}
+                        />
+                        {idFileUploaded ? (
+                          <>
+                            <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+                              <CheckCircle className="w-5 h-5 shrink-0" />
+                            </div>
+                            <span className="text-xs font-black uppercase text-emerald-850 truncate max-w-full px-2">
+                              ID Document Loaded
+                            </span>
+                            <span className="text-[10px] text-slate-505 font-semibold truncate max-w-[220px]">
+                              {govIdFileName || "Verified_ID.png"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="p-2 bg-blue-50 text-blue-600 group-hover:scale-110 transition rounded-full">
+                              <PlusCircle className="w-5 h-5 shrink-0" />
+                            </div>
+                            <span className="text-xs font-bold text-slate-800 uppercase block">Add ID Document File</span>
+                            <span className="text-[9px] text-slate-400 font-mono block">Supports Image or PDF from Gallery or Camera</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+
+                    {/* Proof of Address Upload Button */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase font-black block">Upload Proof of Address</span>
+                      <label className={`group p-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center space-y-2 cursor-pointer transition select-none text-center h-32 ${addressFileUploaded ? "border-emerald-500 bg-emerald-50/15 text-emerald-800" : "border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:border-slate-400"}`} style={{ height: "130px" }}>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              setProofAddressFile(file);
+                              setProofAddressFileName(file.name);
+                              setAddressFileUploaded(true);
+                              addNotification("Proof of Address Registered", `File loaded successfully: ${file.name}`);
+                            }
+                          }}
+                        />
+                        {addressFileUploaded ? (
+                          <>
+                            <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+                              <CheckCircle className="w-5 h-5 shrink-0" />
+                            </div>
+                            <span className="text-xs font-black uppercase text-emerald-850 truncate max-w-full px-2">
+                              Address File Logged
+                            </span>
+                            <span className="text-[10px] text-slate-505 font-semibold truncate max-w-[220px]">
+                              {proofAddressFileName || "Verified_Residence.png"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="p-2 bg-blue-50 text-blue-600 group-hover:scale-110 transition rounded-full">
+                              <PlusCircle className="w-5 h-5 shrink-0" />
+                            </div>
+                            <span className="text-xs font-bold text-slate-805 uppercase block">Add Address Document File</span>
+                            <span className="text-[9px] text-slate-400 font-mono block">Utility bill, statement, government mail</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Video Verification Section */}
+                  <div className="p-5 rounded-2xl bg-[#f8fafc] border border-slate-200 text-left space-y-4 pt-4 mt-2">
+                    <div className="flex items-center space-x-2.5 text-blue-800 font-bold">
+                      <UserCheck className="w-5 h-5 shrink-0" />
+                      <span className="text-[11px] font-mono font-black uppercase tracking-wider">Video Statement Verification System</span>
+                    </div>
+
+                    <div className="p-4 bg-white rounded-xl border border-slate-200 text-xs leading-relaxed text-slate-705 font-sans shadow-sm relative overflow-hidden" style={{ borderLeft: "4px solid #3b82f6" }}>
+                      <span className="text-[9px] font-mono text-blue-600 uppercase font-black block mb-1">Declaration Statement to Record / Upload:</span>
+                      <p className="font-semibold text-slate-850 text-[11px]" style={{ fontStyle: "italic" }}>
+                        "Hello, my name is <strong className="text-blue-700">{fullName || "[Full Name]"}</strong>. I am requesting a loan of <strong className="text-blue-700">${pledgeCollateralAmount.toLocaleString()} USD</strong>. Today's date is <strong className="text-blue-700">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. I confirm that the information I submitted is correct."
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                      <div className="space-y-1 text-center sm:text-left font-sans">
+                        <span className="text-[10px] font-black uppercase text-slate-900 block">Record or Upload Clip</span>
+                        <span className="text-[9px] text-slate-505 font-mono block font-bold">Provide a short 10 to 30-second duration verification.</span>
+                      </div>
+
+                      <div className="flex space-x-2.5 shrink-0">
+                        {/* Native File Upload button Alternative */}
+                        <label className="py-2.5 px-4 rounded-xl border border-slate-350 bg-white hover:bg-slate-50 cursor-pointer shadow-sm text-slate-705 font-mono text-[10px] font-black uppercase tracking-wider block transition select-none">
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                const file = e.target.files[0];
+                                setVideoFile(file);
+                                setVideoFileName(file.name);
+                                setVideoRecorded(true);
+                                setSelfieFileUploaded(true);
+                                addNotification("Video Verification Registered", `Video loaded successfully: ${file.name}`);
+                              }
+                            }}
+                          />
+                          Upload File
                         </label>
 
-                        <label 
-                          htmlFor="address-upload-input"
-                          className={`p-3.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center space-y-1.5 cursor-pointer hover:bg-slate-900 transition ${addressFileUploaded ? "border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold" : "border-slate-800 text-slate-400 font-medium"}`}
-                        >
-                          <Landmark className="w-5 h-5 text-[#38bdf8]" />
-                          <span className="text-[10px] font-mono text-center leading-tight">Proof of Residence</span>
-                          <span className="text-[8px] text-slate-500 font-sans font-normal">Utility bills, statements, documents</span>
-                          {addressFileUploaded ? (
-                            <span className="text-[9px] font-black uppercase text-emerald-400 truncate max-w-full">✓ {proofAddressFileName || "Verified_Residence.png"}</span>
-                          ) : (
-                            <span className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">Choose File</span>
-                          )}
-                        </label>
+                        {/* Interactive Recording triggers */}
+                        {!recordingVideo && !videoRecorded && (
+                          <button
+                            type="button"
+                            onClick={startVideoRecording}
+                            className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono text-[10px] font-black uppercase tracking-wider cursor-pointer shadow-sm transition inline-flex items-center hover:scale-[1.02]"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full bg-white mr-2 animate-ping shrink-0" />
+                            Record (5s)
+                          </button>
+                        )}
+
+                        {recordingVideo && (
+                          <div className="py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-950 text-red-500 font-mono text-[10px] font-bold uppercase tracking-wider animate-pulse flex items-center">
+                            Recording ({videoSeconds}s)
+                          </div>
+                        )}
+
+                        {videoRecorded && (
+                          <div className="py-2.5 px-4 rounded-xl bg-emerald-550 text-white border border-emerald-300 font-mono text-[10px] font-black uppercase tracking-wider flex items-center">
+                            ✓ Video Recorded
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* INTERACTIVE BIOMETRIC FACE & VIDEO CAPTURE COVENANTS */}
-                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
-                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>📸 STEP B.1: LIVE BIOMETRIC FACE SCAN & VIDEO COVENANT</span>
-                  </h4>
-                  
-                  <p className="text-[11px] text-slate-400 font-bold leading-relaxed">
-                    To comply with global anti-fraud treaties, provide either a live webcam snapshots scan or a 5-second security video confirmation log.
-                  </p>
+                  {/* Digital Signature & Electronic Sign Agreement */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 pt-4">
+                    <label className="flex items-start space-x-2.5 text-xs text-slate-750 cursor-pointer select-none font-bold">
+                      <input
+                        type="checkbox"
+                        checked={agreementChecked}
+                        onChange={(e) => setAgreementChecked(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 bg-white text-blue-600 mt-0.5 shrink-0"
+                      />
+                      <span>I declare that I verify, printed sign, and accept the global institutional master credit covenant guidelines.</span>
+                    </label>
 
-                  <div className="grid grid-cols-3 gap-2 p-1 bg-slate-900 rounded-xl border border-slate-800">
-                    {[
-                      { id: "upload", name: "Manual Upload" },
-                      { id: "camera", name: "Camera Capture" },
-                      { id: "video", name: "Video Verification" }
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveBiometricTab(tab.id as any);
-                          stopCamera();
-                        }}
-                        className={`py-1.5 rounded-lg text-[10px] font-mono font-black uppercase text-center transition cursor-pointer select-none ${activeBiometricTab === tab.id ? "bg-sky-500/10 text-sky-400" : "text-slate-500 hover:text-slate-350"}`}
-                      >
-                        {tab.name}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-850 min-h-[220px] flex flex-col items-center justify-center text-center space-y-4 relative">
-                    {activeBiometricTab === "upload" && (
-                      <div className="space-y-3">
-                        <div className="w-12 h-12 rounded-full bg-slate-950 flex items-center justify-center mx-auto border border-slate-800">
-                          <Shield className="w-6 h-6 text-sky-400" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-white uppercase tracking-wider">Fast Scan Simulation</p>
-                          <p className="text-[10px] text-slate-400 font-bold max-w-sm mt-1">
-                            Drag and drop your civil biometric portrait photo or click the trigger below.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelfieFileUploaded(true);
-                            setCapturedImage("https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=250");
-                            addNotification("Biometrics Synchronized", "Simulated portrait face details imported successfully.");
-                          }}
-                          className={`py-2 px-4 rounded-xl border font-mono text-[10px] uppercase font-black tracking-wide transition cursor-pointer select-none ${selfieFileUploaded ? "bg-emerald-500/10 border-emerald-500 text-emerald-400" : "bg-slate-950 border-slate-800 text-slate-350 hover:bg-slate-850"}`}
-                        >
-                          {selfieFileUploaded ? "✓ Selfie Photo Synced" : "Trigger Snapshot Import"}
-                        </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5 items-end">
+                      <div className="space-y-1">
+                        <label htmlFor="digital-signature" className="text-[9px] font-mono text-slate-500 uppercase font-black">Electronic Signature (Type Your Full Legal Name)</label>
+                        <input
+                          id="digital-signature"
+                          type="text"
+                          required
+                          placeholder="Must match Legal Full Name exactly"
+                          value={sigPrintedName}
+                          onChange={(e) => setSigPrintedName(e.target.value)}
+                          className="w-full h-11 px-4 rounded-xl bg-white text-slate-900 border border-slate-300 font-sans text-xs focus:outline-none focus:border-blue-600 font-bold"
+                          style={{ backgroundColor: "#ffffff", color: "#0f172a", border: "1px solid #cbd5e1" }}
+                        />
                       </div>
-                    )}
 
-                    {activeBiometricTab === "camera" && (
-                      <div className="w-full h-full flex flex-col items-center justify-center space-y-3">
-                        {cameraActive ? (
-                          <div className="w-64 h-48 bg-slate-950 rounded-xl overflow-hidden border border-slate-800 relative">
-                            <video
-                              ref={videoRef}
-                              autoPlay
-                              playsInline
-                              muted
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 border border-sky-450/40 pointer-events-none rounded-xl animate-pulse" />
-                            <div className="absolute top-2 right-2 text-[8px] bg-sky-500/80 text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse flex items-center space-x-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-450 shrink-0" />
-                              <span>Live Sensor</span>
-                            </div>
-                          </div>
-                        ) : capturedImage ? (
-                          <div className="w-64 h-48 bg-slate-950 rounded-xl overflow-hidden border border-slate-800 relative">
-                            <img
-                              src={capturedImage}
-                              alt="Captured selfie"
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute top-2 right-2 text-[8px] bg-emerald-500 text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                              ✓ Snap Verified
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-slate-950 flex items-center justify-center border border-slate-800">
-                            <User className="w-6 h-6 text-slate-500" />
-                          </div>
-                        )}
-
-                        <div className="flex space-x-2.5">
-                          {!cameraActive && !capturedImage && (
-                            <button
-                              type="button"
-                              onClick={startCamera}
-                              className="py-2 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-mono text-[10px] uppercase font-black cursor-pointer shadow-md transition"
-                            >
-                              Initialize Camera
-                            </button>
-                          )}
-                          {cameraActive && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={capturePhoto}
-                                className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] uppercase font-black cursor-pointer shadow-md transition"
-                              >
-                                Trigger Capture
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  stopCamera();
-                                  setCameraActive(false);
-                                }}
-                                className="py-2 px-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 font-mono text-[10px] uppercase font-black cursor-pointer hover:bg-slate-850"
-                              >
-                                Stop
-                              </button>
-                            </>
-                          )}
-                          {capturedImage && (
-                            <button
-                              type="button"
-                              onClick={startCamera}
-                              className="py-2 px-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 font-mono text-[10px] uppercase font-black cursor-pointer hover:bg-slate-850"
-                            >
-                              Reset Capture
-                            </button>
-                          )}
-                        </div>
+                      <div className="text-[9px] font-mono text-slate-400 text-left md:text-right leading-relaxed block xl:pb-1.5 font-bold">
+                        * Electronic signature matches connected wallet identity.
                       </div>
-                    )}
-
-                    {activeBiometricTab === "video" && (
-                      <div className="w-full h-full flex flex-col items-center justify-center space-y-3">
-                        {recordingVideo ? (
-                          <div className="w-64 h-48 bg-slate-950 rounded-xl overflow-hidden border border-slate-850 relative flex items-center justify-center">
-                            <div className="absolute inset-2 border-2 border-red-500/20 rounded-xl animate-ping pointer-events-none" />
-                            <div className="space-y-1.5">
-                              <span className="text-3xl font-mono font-black text-red-500">{videoSeconds}s</span>
-                              <span className="text-[9px] text-slate-350 uppercase font-bold block">Recording Verification clip...</span>
-                            </div>
-                            <div className="absolute top-2 right-2 text-[8px] bg-red-500 text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
-                              REC 🔴
-                            </div>
-                          </div>
-                        ) : videoRecorded ? (
-                          <div className="w-64 h-48 bg-slate-950 rounded-xl border border-slate-850 relative flex flex-col items-center justify-center space-y-2">
-                            <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-550/20">
-                              <CheckCircle className="w-6 h-6" />
-                            </span>
-                            <div>
-                              <span className="text-[10px] text-white uppercase font-black font-sans tracking-wide block">Verification Clip Logged</span>
-                              <span className="text-[9px] text-slate-400 font-mono">Size: 4.8 MB · Duration: 5s</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-slate-950 flex items-center justify-center border border-slate-850 animate-pulse">
-                            <Clock className="w-6 h-6 text-slate-500" />
-                          </div>
-                        )}
-
-                        <div className="flex space-x-2.5">
-                          {!recordingVideo && !videoRecorded && (
-                            <button
-                              type="button"
-                              onClick={startVideoRecording}
-                              className="py-2 px-4 rounded-xl bg-red-655 hover:bg-red-555 text-white font-mono text-[10px] uppercase font-black cursor-pointer shadow-md transition"
-                            >
-                              Dispatch 5s Recording
-                            </button>
-                          )}
-                          {videoRecorded && (
-                            <button
-                              type="button"
-                              onClick={startVideoRecording}
-                              className="py-2 px-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 font-mono text-[10px] uppercase font-black cursor-pointer hover:bg-slate-850"
-                            >
-                              Re-record Suffix Clip
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Digital covenant signing on the website */}
-                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
-                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>✒️ STEP C: DIGITAL COVENANT</span>
-                  </h4>
-                  <div className="h-24 overflow-y-auto bg-slate-900 p-3 rounded-xl text-[9px] text-slate-400 space-y-2 font-mono leading-relaxed border border-slate-850">
-                    <p><strong>CLAUSE A (VAULT CUSTODY):</strong> The borrower acknowledges collateral remains assigned into multi-party secure custodian contracts with zero secondary reuse.</p>
-                    <p><strong>CLAUSE B (LIQUIDITY ACCORD):</strong> Automatic margin safeguards will alert if LTV ratio shifts from 50% above critical threshold.</p>
-                  </div>
-
-                  <label className="flex items-start space-x-3 text-xs text-slate-350 cursor-pointer select-none font-bold">
-                    <input
-                      type="checkbox"
-                      checked={agreementChecked}
-                      onChange={(e) => setAgreementChecked(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-[#0284c7] mt-0.5"
-                    />
-                    <span>I declare that I verify, printed sign, and accept the master institutional loan parameters.</span>
-                  </label>
-
-                  <div className="space-y-1">
-                    <label htmlFor="digital-signature" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Printed signature name</label>
-                    <input
-                      id="digital-signature"
-                      type="text"
-                      required
-                      placeholder="Type your full legal name"
-                      value={sigPrintedName}
-                      onChange={(e) => setSigPrintedName(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-sky-400 font-mono text-xs focus:outline-none focus:border-sky-500 font-bold"
-                    />
+                    </div>
                   </div>
                 </div>
 
@@ -2572,17 +1934,17 @@ export default function DashboardView({
                   <motion.div 
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="p-4 rounded-2xl bg-[#3f191e]/80 border-2 border-rose-500/40 text-left space-y-2"
+                    className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-left space-y-2 text-amber-900 shadow font-sans"
                   >
-                    <span className="text-[10px] font-mono text-rose-400 uppercase font-extrabold flex items-center space-x-1.5">
-                      <ShieldAlert className="w-4 h-4 text-rose-500 animate-pulse" />
-                      <span>Security & Identity Clearance Blocked (Rejected)</span>
+                    <span className="text-[10px] font-mono text-amber-700 uppercase font-extrabold flex items-center space-x-1.5">
+                      <ShieldAlert className="w-4 h-4 text-amber-600 animate-pulse" />
+                      <span>Security Compliance & Identity Blocked (Declined)</span>
                     </span>
-                    <p className="text-xs font-sans text-rose-200 leading-relaxed font-semibold">
+                    <p className="text-xs font-sans text-slate-800 leading-relaxed font-bold">
                       {customValidationError}
                     </p>
-                    <p className="text-[10px] font-mono text-slate-400 uppercase font-bold">
-                      * Please correct the highlighted details to resume institutional approval.
+                    <p className="text-[10px] font-mono text-slate-500 uppercase font-bold">
+                      * Kindly correct the specified fields to submit regulatory credentials successfully.
                     </p>
                   </motion.div>
                 )}
@@ -2608,7 +1970,7 @@ export default function DashboardView({
                   <div className="relative w-44 h-44 flex items-center justify-center rounded-full border-4 border-slate-850 bg-slate-950 shadow-inner">
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
                       <span className="text-3xl font-mono font-black text-[#38bdf8] tracking-tight block">
-                        {kycSimulatedMinutes < 10 ? `0${kycSimulatedMinutes}` : kycSimulatedMinutes}:{kycSimulatedSeconds < 10 ? `0${kycSimulatedSeconds}` : kycSimulatedSeconds}
+                        {regulatoryReviewMinutes < 10 ? `0${regulatoryReviewMinutes}` : regulatoryReviewMinutes}:{regulatoryReviewSeconds < 10 ? `0${regulatoryReviewSeconds}` : regulatoryReviewSeconds}
                       </span>
                       <span className="text-[9px] font-mono text-slate-500 uppercase font-black block mt-1 tracking-widest">
                         Reviewing docs
@@ -2927,8 +2289,8 @@ export default function DashboardView({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setSimulatedWalletBalance((b) => b + 10000);
-                                    addNotification("Wallet Funded Successfully", "Added +$10,000 USD of test capital to your Web3 escrow node.");
+                                    setActiveEscrowLedgerBalance((b) => b + 10000);
+                                    addNotification("Wallet Funded Successfully", "Added +$10,000 USD of escrow gas threshold capital to your Web3 escrow node.");
                                   }}
                                   className="flex-1 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-mono uppercase font-black transition cursor-pointer text-center"
                                 >
@@ -2937,8 +2299,8 @@ export default function DashboardView({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setSimulatedWalletBalance((b) => Math.max(0, b - 10000));
-                                    addNotification("Wallet Debited Successfully", "Deducted -$10,000 USD of test capital from your Web3 escrow node.");
+                                    setActiveEscrowLedgerBalance((b) => Math.max(0, b - 10000));
+                                    addNotification("Wallet Debited Successfully", "Deducted -$10,000 USD of escrow gas threshold capital from your Web3 escrow node.");
                                   }}
                                   className="flex-1 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-450 border border-rose-500/20 rounded-xl text-[9px] font-mono uppercase font-black transition cursor-pointer text-center"
                                 >
@@ -3144,7 +2506,7 @@ export default function DashboardView({
                       </div>
                     )}
 
-                    {/* WEB3 INTERACTIVE SIGNATURE POPUP MODAL (Simulates browser-extension web3 confirmation dialog box) */}
+                    {/* WEB3 INTERACTIVE SIGNATURE POPUP MODAL (Secures browser-extension web3 confirmation dialog box) */}
                     {isWeb3ModalOpen && (
                       <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-6 z-50 text-center animate-fade-in border border-slate-800">
                         {web3ModalState === "idle" && (

@@ -248,8 +248,8 @@ export default function App() {
     setActiveTab("calculator");
   };
 
-  // Click on "Simulate in Calculator"
-  const handleSimulateAssetInCalculator = (symbol: string) => {
+  // Click to calculate rates for specific asset
+  const handleCalculateAssetRates = (symbol: string) => {
     setPrefillAssetSymbol(symbol);
     setActiveTab("calculator");
   };
@@ -473,7 +473,7 @@ export default function App() {
                           <div className="space-y-12">
                             <MarketDataSection
                               assets={assets}
-                              onSelectAsset={handleSimulateAssetInCalculator}
+                              onSelectAsset={handleCalculateAssetRates}
                               onRefresh={loadPricesField}
                               isRefreshing={isApiLoading}
                               lastUpdated={lastUpdated}
@@ -633,7 +633,7 @@ export default function App() {
 
             <MarketDataSection
               assets={assets}
-              onSelectAsset={handleSimulateAssetInCalculator}
+              onSelectAsset={handleCalculateAssetRates}
               onRefresh={loadPricesField}
               isRefreshing={isApiLoading}
               lastUpdated={lastUpdated}
