@@ -32,6 +32,39 @@ export default function Navbar({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+  const [sidebarSide, setSidebarSide] = useState<"left" | "right">("left");
+
+  const renderToggleIcon = (side: "left" | "right") => {
+    const isOpen = leftSidebarOpen && sidebarSide === side;
+    return (
+      <div className="relative w-5 h-5 flex items-center justify-center">
+        {/* Line 1 (Top) */}
+        <span 
+          className={`absolute h-[2px] bg-current rounded-full transition-all duration-300 ${
+            isOpen 
+              ? "w-[2px] h-5 rotate-0" 
+              : "w-5 translate-y-[-5px]"
+          }`}
+        />
+        {/* Line 2 (Middle) */}
+        <span 
+          className={`absolute h-[2px] bg-current rounded-full transition-all duration-300 ${
+            isOpen 
+              ? "opacity-0 w-0 h-0" 
+              : "w-5"
+          }`}
+        />
+        {/* Line 3 (Bottom) */}
+        <span 
+          className={`absolute h-[2px] bg-current rounded-full transition-all duration-300 ${
+            isOpen 
+              ? "w-[2px] h-5 opacity-0" 
+              : "w-5 translate-y-[5px]"
+          }`}
+        />
+      </div>
+    );
+  };
 
   const menuItems: { id: ActiveTab; label: string }[] = [
     { id: "home", label: "Home" },
@@ -61,13 +94,16 @@ export default function Navbar({
           
           {/* Left Hamburger menu button & Logo Container */}
           <div className="flex items-center space-x-4">
-            {/* Master Left Sidebar Trigger (Three horizontal lines) */}
+            {/* Master Left Sidebar Trigger (Three horizontal lines / single vertical line on toggle) */}
             <button
-              onClick={() => setLeftSidebarOpen(true)}
+              onClick={() => {
+                setSidebarSide("left");
+                setLeftSidebarOpen(!leftSidebarOpen);
+              }}
               className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-[#0d1527] hover:border-amber-500/40 text-amber-500 hover:text-amber-400 transition cursor-pointer shadow-md flex items-center justify-center shrink-0"
               title="Open Navigation Drawer"
             >
-              <Menu className="w-5 h-5" />
+              {renderToggleIcon("left")}
             </button>
 
             {/* Logo */}
@@ -116,83 +152,103 @@ export default function Navbar({
             ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="hidden lg:flex items-center space-x-4">
-            {/* Wallet-First Unified Identity connector */}
-            {wallet.status === "connected" ? (
-              <div className="relative">
+          {/* Right Action & Menu Section */}
+          <div className="flex items-center space-x-2.5 sm:space-x-4">
+            
+            {/* Desktop Action Buttons */}
+            <div className="hidden lg:flex items-center space-x-4">
+              {/* Wallet-First Unified Identity connector */}
+              {wallet.status === "connected" ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                    className="flex items-center space-x-2.5 px-4.5 py-2.5 rounded-xl border-2 border-amber-500/40 bg-amber-500/15 text-amber-400 font-mono text-xs xl:text-sm font-black uppercase tracking-wider hover:bg-amber-500/25 transition-all duration-200 cursor-pointer shadow-lg shadow-amber-500/10"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                    <span>{truncateAddress(wallet.address || "")}</span>
+                    <ChevronDown className="w-4 h-4 text-amber-200" />
+                  </button>
+
+                  <AnimatePresence>
+                    {userDropdownOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-10" 
+                          onClick={() => setUserDropdownOpen(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-950 border border-slate-850 shadow-2xl z-20 py-1"
+                        >
+                          <div className="px-4 py-2.5 border-b border-slate-900">
+                            <p className="text-[10px] font-mono text-amber-400 uppercase tracking-wider font-semibold">
+                              Connected Web3 Account
+                            </p>
+                            <p className="text-[11px] text-white truncate max-w-full font-mono mt-0.5">
+                              {wallet.address}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setUserDropdownOpen(false);
+                              handleNavClick("dashboard");
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-900 transition font-sans font-semibold uppercase"
+                          >
+                            Control Dashboard
+                          </button>
+                          <button
+                            onClick={() => {
+                              setUserDropdownOpen(false);
+                              disconnectWallet();
+                              handleNavClick("home");
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs text-rose-450 hover:text-rose-400 hover:bg-slate-900 transition font-sans font-semibold uppercase"
+                          >
+                            Disconnect Wallet
+                          </button>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
                 <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className="flex items-center space-x-2.5 px-4.5 py-2.5 rounded-xl border-2 border-amber-500/40 bg-amber-500/15 text-amber-400 font-mono text-xs xl:text-sm font-black uppercase tracking-wider hover:bg-amber-500/25 transition-all duration-200 cursor-pointer shadow-lg shadow-amber-500/10"
+                  onClick={() => {
+                    handleNavClick("dashboard");
+                    connectWallet();
+                  }}
+                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/25 text-white text-xs xl:text-sm font-sans font-black uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-lg shadow-amber-500/10 active:scale-95"
                 >
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                  <span>{truncateAddress(wallet.address || "")}</span>
-                  <ChevronDown className="w-4 h-4 text-amber-200" />
+                  <Wallet className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Connect Wallet</span>
                 </button>
+              )}
+            </div>
 
-                <AnimatePresence>
-                  {userDropdownOpen && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-10" 
-                        onClick={() => setUserDropdownOpen(false)}
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 8 }}
-                        className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-950 border border-slate-850 shadow-2xl z-20 py-1"
-                      >
-                        <div className="px-4 py-2.5 border-b border-slate-900">
-                          <p className="text-[10px] font-mono text-amber-400 uppercase tracking-wider font-semibold">
-                            Connected Web3 Account
-                          </p>
-                          <p className="text-[11px] text-white truncate max-w-full font-mono mt-0.5">
-                            {wallet.address}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setUserDropdownOpen(false);
-                            handleNavClick("dashboard");
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-900 transition font-sans font-semibold uppercase"
-                        >
-                          Control Dashboard
-                        </button>
-                        <button
-                          onClick={() => {
-                            setUserDropdownOpen(false);
-                            disconnectWallet();
-                            handleNavClick("home");
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-rose-450 hover:text-rose-400 hover:bg-slate-900 transition font-sans font-semibold uppercase"
-                        >
-                          Disconnect Wallet
-                        </button>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <button
-                onClick={() => connectWallet()}
-                className="flex items-center space-x-2 px-5 py-2.5 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/25 text-white text-xs xl:text-sm font-sans font-black uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-lg shadow-amber-500/10 active:scale-95"
+            {/* Mobile Wallet address indicator if Connected */}
+            {wallet.status === "connected" && (
+              <div 
+                onClick={() => handleNavClick("dashboard")}
+                className="flex lg:hidden items-center px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-pointer text-[10.5px] font-mono font-extrabold shadow-sm active:scale-95"
+                title="Go to Dashboard"
               >
-                <Wallet className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Connect Wallet</span>
-              </button>
+                {truncateAddress(wallet.address || "")}
+              </div>
             )}
-          </div>
 
-          {/* Mobile Menu Button */}
-          <div className="flex items-center lg:hidden space-x-2">
+            {/* Master Right Sidebar Trigger (Three horizontal lines / single vertical line on toggle) - Symmetrical design on absolute right side */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              onClick={() => {
+                setSidebarSide("right");
+                setLeftSidebarOpen(!leftSidebarOpen);
+              }}
+              className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-[#0d1527] hover:border-amber-500/40 text-amber-500 hover:text-amber-400 transition cursor-pointer shadow-md flex items-center justify-center shrink-0"
+              title="Open Navigation Drawer"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {renderToggleIcon("right")}
             </button>
           </div>
         </div>
@@ -285,13 +341,13 @@ export default function Navbar({
               className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm pointer-events-auto"
             />
             
-            {/* Drawer Body */}
+            {/* Drawer Body - Slides in from left or right based on which three-line button was triggered */}
             <motion.div
-              initial={{ x: "-100%" }}
+              initial={{ x: sidebarSide === "left" ? "-100%" : "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              exit={{ x: sidebarSide === "left" ? "-100%" : "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 bottom-0 w-[300px] max-w-[85vw] bg-[#050c1e] border-r border-[#1e293b]/70 shadow-[5px_0_30px_rgba(0,0,0,0.65)] z-50 p-6 flex flex-col justify-between overflow-y-auto pointer-events-auto text-left"
+              className={`fixed top-0 bottom-0 w-[300px] max-w-[85vw] bg-[#050c1e] ${sidebarSide === "left" ? "left-0 border-r" : "right-0 border-l"} border-[#1e293b]/70 shadow-[5px_0_30px_rgba(0,0,0,0.65)] z-50 p-6 flex flex-col justify-between overflow-y-auto pointer-events-auto text-left`}
             >
               <div>
                 {/* Header of Drawer */}

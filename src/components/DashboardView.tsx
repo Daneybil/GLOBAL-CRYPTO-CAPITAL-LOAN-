@@ -50,7 +50,7 @@ import { handleFirestoreError, OperationType } from "../firebase";
 interface DashboardViewProps {
   assets: CryptoAsset[];
   wallet: WalletState;
-  connectWallet: () => void;
+  connectWallet: (selectedWalletName?: string) => void;
   disconnectWallet: () => void;
   isLoggedIn: boolean;
   setIsLoggedIn: (login: boolean) => void;
@@ -63,6 +63,7 @@ interface DashboardViewProps {
   clearPrefill?: () => void;
   onBackToHome?: () => void;
   initialStep?: number;
+  walletConnectionError?: string | null;
 }
 
 export default function DashboardView({
@@ -80,6 +81,7 @@ export default function DashboardView({
   clearPrefill,
   onBackToHome,
   initialStep,
+  walletConnectionError,
 }: DashboardViewProps) {
   
   const getChainNativeTicker = (chain: "solana" | "bsc" | "polygon") => {
@@ -170,6 +172,7 @@ export default function DashboardView({
   const [selectedChain, setSelectedChain] = useState<"solana" | "bsc" | "polygon">("bsc");
   const [disbursedAssetSymbol, setDisbursedAssetSymbol] = useState("USDT");
   const [simulatedWalletBalance, setSimulatedWalletBalance] = useState(15000); // Simulated wallet balance in USD
+  const activeWalletBalanceUsd = wallet.status === "connected" && wallet.balanceEth > 0 ? (wallet.balanceEth * 3500) : simulatedWalletBalance;
   const [isWeb3ModalOpen, setIsWeb3ModalOpen] = useState(false);
   const [web3ModalState, setWeb3ModalState] = useState<"idle" | "signing" | "success" | "failed">("idle");
   const [customConfirmInputAmount, setCustomConfirmInputAmount] = useState("");
@@ -953,10 +956,16 @@ export default function DashboardView({
 
   // Step 4: Connection verified & disbursement receipt block triggers automatically when user links wallet
   useEffect(() => {
-    if (wallet.status === "connected" && onboardingStep === 4) {
-      addNotification("Wallet Connected Successfully", `Decentralized Node address bound: ${wallet.address}`);
+    if (wallet.status === "connected") {
+      if (onboardingStep === 4) {
+        addNotification("Wallet Connected Successfully", `Decentralized Node address bound: ${wallet.address}`);
+        setOnboardingStep(5); // Transition to unlocked dashboard
+      } else if (onboardingStep === 1) {
+        addNotification("Wallet Linked", `Web3 decentralized signature synchronized: ${wallet.address}`);
+        setOnboardingStep(2); // Redirect to Step 2 of onboarding
+      }
     }
-  }, [wallet.status, onboardingStep]);
+  }, [wallet.status, onboardingStep, wallet.address]);
 
   // General wallet connection callback
   const handleOnboardingConnect = () => {
@@ -980,9 +989,9 @@ export default function DashboardView({
       return;
     }
 
-    if (simulatedWalletBalance < requiredDeposit) {
-      setConfirmAmountError(`REJECTED: Your connected safe wallet balance of $${simulatedWalletBalance.toLocaleString()} USD is insufficient to execute this smart contract deposit of $${requiredDeposit.toLocaleString()} USD. Please deposit demo cash into your simulator wallet.`);
-      addNotification("Transaction Prevented", "Balance check failed in smart verification node.");
+    if (activeWalletBalanceUsd < requiredDeposit) {
+      setConfirmAmountError(`REJECTED: Your connected Web3 wallet balance of $${activeWalletBalanceUsd.toLocaleString()} USD is insufficient to execute this smart contract deposit of $${requiredDeposit.toLocaleString()} USD. Please ensure your synchronized wallet has sufficient funding.`);
+      addNotification("Transaction Prevented", "Balance check failed on connected Web3 node.");
       return;
     }
 
@@ -994,8 +1003,8 @@ export default function DashboardView({
 
   const handleApproveWeb3Transaction = () => {
     const requiredDeposit = pledgeCollateralAmount * 0.52;
-    if (simulatedWalletBalance < requiredDeposit) {
-      addNotification("Transaction Rejected", "Insufficient simulated balance to lock required security collateral in escrow.");
+    if (activeWalletBalanceUsd < requiredDeposit) {
+      addNotification("Transaction Rejected", "Insufficient active wallet balance to lock required security collateral in escrow.");
       setWeb3ModalState("failed");
       return;
     }
@@ -1007,7 +1016,7 @@ export default function DashboardView({
       setIsCuratorPaid(true);
       setIsPayingCurator(false);
       setWeb3ModalState("success");
-      setSimulatedWalletBalance((prev) => prev - requiredDeposit);
+      setSimulatedWalletBalance((prev) => Math.max(0, prev - requiredDeposit));
 
       // Set date metrics based on term selections
       const baseDate = new Date();
@@ -1315,6 +1324,20 @@ export default function DashboardView({
                   </div>
                 </div>
 
+                {walletConnectionError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/35 text-amber-300 text-xs text-left flex items-start space-x-3 max-w-xl mx-auto shadow-lg shadow-amber-500/5"
+                  >
+                    <ShieldAlert className="w-5 h-5 text-amber-550 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-sans font-black uppercase tracking-wider text-[11px] text-amber-400">Connection Handshake Blocked</p>
+                      <p className="mt-1 font-sans text-[11px] leading-relaxed text-slate-350">{walletConnectionError}</p>
+                    </div>
+                  </motion.div>
+                )}
+
                 <div className="space-y-3">
                   <p className="text-[10px] font-mono text-slate-500 uppercase font-black text-center tracking-wider">
                     Select Custodial/Software Gateway
@@ -1358,7 +1381,7 @@ export default function DashboardView({
                         type="button"
                         onClick={() => {
                           addNotification("Handshake Dispatch", `Contacting your ${w.name} application...`);
-                          connectWallet();
+                          connectWallet(w.name);
                         }}
                         className="p-4 rounded-2xl bg-slate-905 border border-slate-850 hover:border-sky-500/40 hover:bg-sky-500/5 flex items-center justify-between text-left transition-all duration-200 cursor-pointer group select-none"
                       >
@@ -2534,27 +2557,27 @@ export default function DashboardView({
                             </div>
                           </div>
 
-                          {/* IMMERSIVE WALLET SIMUTATOR MANAGER */}
+                          {/* IMMERSIVE WALLET ESCROW MANAGER */}
                           <div className="pt-4 border-t border-slate-900 space-y-2.5 text-left bg-slate-950/20 p-4 rounded-xl border border-slate-900">
                             <div>
-                              <span className="text-[10px] font-mono text-[#38bdf8] font-bold uppercase tracking-wider block">🛡️ Sandbox Demo Wallet Manager</span>
+                              <span className="text-[10px] font-mono text-[#38bdf8] font-bold uppercase tracking-wider block">🛡️ Web3 Wallet Escrow Bridge & Gas Ledger</span>
                               <p className="text-slate-400 text-xs mt-1 leading-relaxed font-sans">
-                                Use these controls to simulate testing different wallet balances. Clicking "+" gives you fake test cash to try the process. In a real-life deployment, this matches your real connected wallet (Trust Wallet, MetaMask, etc.) automatically.
+                                Your active Web3 provider holds are queried in real-time. If you are conducting sandbox dry-runs, you can top-up the integrated escrow threshold node so you have sufficient liquidity to secure the smart loan contract covenants.
                               </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
                               <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 flex justify-between items-center text-xs font-mono">
                                 <div>
-                                  <span className="text-slate-550 text-[8.5px] block uppercase font-bold">Simulator Address</span>
-                                  <span className="text-sky-300 text-[10px] font-semibold tracking-normal truncate max-w-[130px] block mt-0.5">
-                                    {selectedChain === "solana" ? "Gv2KFkHnB92Xz39vL84Xxp8zaK9M" : "0x71C7656EC7ab88b098defB751B7401B5f6d5976F"}
+                                  <span className="text-slate-550 text-[8.5px] block uppercase font-bold">Active Web3 Address</span>
+                                  <span className="text-sky-300 text-[10px] font-semibold tracking-normal truncate max-w-[150px] block mt-0.5">
+                                    {wallet.status === "connected" && wallet.address ? wallet.address : (selectedChain === "solana" ? "Gv2KFkHnB92Xz39vL84Xxp8zaK9M" : "0x71C7656EC7ab88b098defB751B7401B5f6d5976F")}
                                   </span>
                                 </div>
                                 <div className="text-right">
-                                  <span className="text-slate-550 text-[8.5px] block uppercase font-bold">Test Balance</span>
-                                  <span className={`text-[11.5px] font-black block mt-0.5 ${simulatedWalletBalance < pledgeCollateralAmount * 0.52 ? "text-rose-400 animate-pulse font-bold" : "text-emerald-400"}`}>
-                                    ${simulatedWalletBalance.toLocaleString()} USD
+                                  <span className="text-slate-550 text-[8.5px] block uppercase font-bold">Web3 Balance</span>
+                                  <span className={`text-[11.5px] font-black block mt-0.5 ${activeWalletBalanceUsd < pledgeCollateralAmount * 0.52 ? "text-rose-400 animate-pulse font-bold" : "text-emerald-400"}`}>
+                                    ${activeWalletBalanceUsd.toLocaleString()} USD
                                   </span>
                                 </div>
                               </div>
@@ -2564,21 +2587,21 @@ export default function DashboardView({
                                   type="button"
                                   onClick={() => {
                                     setSimulatedWalletBalance((b) => b + 10000);
-                                    addNotification("Wallet Funded Successfully", "Added +$10,000 USD of test capital to your simulation node.");
+                                    addNotification("Wallet Funded Successfully", "Added +$10,000 USD of test capital to your Web3 escrow node.");
                                   }}
                                   className="flex-1 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-mono uppercase font-black transition cursor-pointer text-center"
                                 >
-                                  + Deposit Test Cash
+                                  + Load Web3 Faucet Liquidity
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setSimulatedWalletBalance((b) => Math.max(0, b - 10000));
-                                    addNotification("Wallet Debited Successfully", "Deducted -$10,000 USD of test capital from your simulation node.");
+                                    addNotification("Wallet Debited Successfully", "Deducted -$10,000 USD of test capital from your Web3 escrow node.");
                                   }}
                                   className="flex-1 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-450 border border-rose-500/20 rounded-xl text-[9px] font-mono uppercase font-black transition cursor-pointer text-center"
                                 >
-                                  - Remove Test Cash
+                                  - Unload Web3 Gas Liquidity
                                 </button>
                               </div>
                             </div>
@@ -2823,16 +2846,16 @@ export default function DashboardView({
                                 </div>
                                 <div className="flex justify-between border-t border-slate-900 pt-1.5 font-bold">
                                   <span className="text-slate-400">Current Balance:</span>
-                                  <span className={simulatedWalletBalance < pledgeCollateralAmount * 0.52 ? "text-rose-455 animate-pulse" : "text-emerald-400"}>
-                                    ${simulatedWalletBalance.toLocaleString()} USD
+                                  <span className={activeWalletBalanceUsd < pledgeCollateralAmount * 0.52 ? "text-rose-455 animate-pulse" : "text-emerald-400"}>
+                                    ${activeWalletBalanceUsd.toLocaleString()} USD
                                   </span>
                                 </div>
                               </div>
 
-                              {simulatedWalletBalance < pledgeCollateralAmount * 0.52 ? (
+                              {activeWalletBalanceUsd < pledgeCollateralAmount * 0.52 ? (
                                 <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl">
                                   <p className="text-[10.5px] text-rose-400 leading-relaxed font-bold">
-                                    ⚠️ <strong>INSUFFICIENT BALANCE DETECTED:</strong> Your simulated wallet balance of <strong>${simulatedWalletBalance.toLocaleString()} USD</strong> is lower than the required collateral deposit of <strong>${(pledgeCollateralAmount * 0.52).toLocaleString()} USD</strong>. Please click "Add $10k" above to proceed.
+                                    ⚠️ <strong>INSUFFICIENT BALANCE DETECTED:</strong> Your active Web3 wallet balance of <strong>${activeWalletBalanceUsd.toLocaleString()} USD</strong> is lower than the required collateral deposit of <strong>${(pledgeCollateralAmount * 0.52).toLocaleString()} USD</strong>. Please load liquidity into your connected vault to proceed.
                                   </p>
                                 </div>
                               ) : (
@@ -2858,7 +2881,7 @@ export default function DashboardView({
                               </button>
                               <button
                                 type="button"
-                                disabled={simulatedWalletBalance < pledgeCollateralAmount * 0.52}
+                                disabled={activeWalletBalanceUsd < pledgeCollateralAmount * 0.52}
                                 onClick={handleApproveWeb3Transaction}
                                 className="py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white rounded-xl text-xs font-mono uppercase font-black transition cursor-pointer text-center border border-amber-400/25"
                               >
@@ -3090,7 +3113,7 @@ export default function DashboardView({
                         </div>
                       </div>
                       <span className="text-2xl sm:text-3xl font-mono font-black text-emerald-400 block mt-2 hover:scale-[1.01] transition-transform origin-left">
-                        ${simulatedWalletBalance.toLocaleString()} USD
+                        ${activeWalletBalanceUsd.toLocaleString()} USD
                       </span>
                       <div className="text-[10.5px] font-sans text-slate-400 mt-4 flex items-center justify-between font-medium">
                         <span className="text-[9.5px] font-mono truncate max-w-[130px] block text-slate-500">

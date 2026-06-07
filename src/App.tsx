@@ -39,13 +39,8 @@ export default function App() {
       setActiveTab("home");
       setHomeActiveSection(null);
     } else if (tab === "kyc") {
-      // Begin KYC: trigger wallet connection if disconnected
-      if (wallet.status !== "connected") {
-        // We call helper to simulate wallet connect automatically
-        connectWallet("MetaMask");
-      }
-      // If signed up, jump directly to Compliance QA form page (Step 2 of dashboard)
-      setDashboardInitialStep(isLoggedIn ? 2 : 1);
+      // Begin KYC: Simply route to dashboard directly without auto-simulating connection triggers
+      setDashboardInitialStep(wallet.status === "connected" ? 2 : 1);
       setActiveTab("dashboard");
     } else if (tab === "about") {
       setActiveTab("home");
@@ -95,6 +90,7 @@ export default function App() {
     balanceEth: 0,
   });
 
+  const [walletConnectionError, setWalletConnectionError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [userEmail, setUserEmail] = useState<string>("investor@cryptocapital.com");
 
@@ -163,13 +159,17 @@ export default function App() {
     }
   }, []);
 
-  // Connect Wallet Action: Real Injected Web3 Provider with Simulator Fallback
+  // Connect Wallet Action: Real Injected Web3 Provider strictly with NO Simulator Fallback
   const connectWallet = async (selectedWalletName: string = "MetaMask") => {
+    setWalletConnectionError(null);
     setWallet({
       status: "connecting",
       address: null,
       balanceEth: 0,
     });
+
+    // Automatically transition to the dashboard onboarding flow so the user sees the real-time logs/handshake status
+    setActiveTab("dashboard");
 
     // 1. Check if a real Web3 provider is present (e.g. Trust Wallet, MetaMask browser)
     if (typeof window !== "undefined" && (window as any).ethereum) {
@@ -180,7 +180,7 @@ export default function App() {
         if (accounts && accounts.length > 0) {
           const userAddress = accounts[0];
           
-          let ethBalanceNum = 35.24;
+          let ethBalanceNum = 3.5;
           try {
             const hexBalance = await provider.request({
               method: "eth_getBalance",
@@ -190,9 +190,6 @@ export default function App() {
               const parseWeiVal = parseInt(hexBalance, 16);
               if (!isNaN(parseWeiVal)) {
                 ethBalanceNum = Number(parseWeiVal) / 1e18;
-              }
-              if (isNaN(ethBalanceNum) || ethBalanceNum === 0) {
-                ethBalanceNum = 35.24; // beautiful fallback default
               }
             }
           } catch (balanceError) {
@@ -205,44 +202,34 @@ export default function App() {
             balanceEth: ethBalanceNum,
           });
           setIsLoggedIn(true);
+          setDashboardInitialStep(2);
+          setActiveTab("dashboard");
           return;
         }
       } catch (handshakeError: any) {
         console.error("Real Web3 provider handshake failed or user rejected connection:", handshakeError);
-        // If they cancelled, we set to disconnected instead of simulation so it doesn't force a simulated login
         setWallet({
           status: "disconnected",
           address: null,
           balanceEth: 0,
         });
+        setWalletConnectionError("Real-time Web3 synchronization was rejected or cancelled by user. Please re-initiate connection and approve the handshake in your wallet application.");
         return;
       }
-    }
-
-    // 2. High-fidelity Simulation fallback if standard browser is used without extensions
-    setTimeout(() => {
-      // Simulate connection address based on selected wallet
-      let simulatedAddress = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
-      if (selectedWalletName === "Trust Wallet") {
-        simulatedAddress = "0x9828Db3bcE6634C24b455b844BC454f4438f4a1b";
-      } else if (selectedWalletName === "Coinbase Wallet") {
-        simulatedAddress = "0x3bcE6634C24d35BC6634C05329241b844BC454ea";
-      } else if (selectedWalletName === "WalletConnect") {
-        simulatedAddress = "0x2C6634C24B55b844BC454F4438f44EF29828dbAC";
-      } else if (selectedWalletName === "Phantom Vault") {
-        simulatedAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
-      }
+    } else {
+      // Injected Web3 provider (ethereum) NOT found!
       setWallet({
-        status: "connected",
-        address: simulatedAddress,
-        balanceEth: 35.24,
+        status: "disconnected",
+        address: null,
+        balanceEth: 0,
       });
-      setIsLoggedIn(true);
-    }, 1200);
+      setWalletConnectionError(`No active Web3 Provider/Ethereum handshake detected in this browser. To securely link your real Trust Wallet or MetaMask account, please open this app inside the dApp utility browser of your Trust Wallet/MetaMask app on mobile, or install their official browser extension on desktop.`);
+    }
   };
 
   // Disconnect Wallet Simulator
   const disconnectWallet = () => {
+    setWalletConnectionError(null);
     setWallet({
       status: "disconnected",
       address: null,
@@ -631,6 +618,7 @@ export default function App() {
             clearPrefill={clearPrefill}
             onBackToHome={() => setActiveTab("home")}
             initialStep={dashboardInitialStep}
+            walletConnectionError={walletConnectionError}
           />
         )}
 
