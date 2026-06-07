@@ -55,9 +55,9 @@ export interface UserKycProfile {
   fullName: string;
   email: string;
   phone: string;
-  documentType: "id_card" | "passport" | "drivers_license";
+  documentType: "id_card" | "passport" | "drivers_license" | "residence_permit";
   documentNumber: string;
-  kycStatus: "unsubmitted" | "pending" | "verified" | "rejected";
+  kycStatus: "unsubmitted" | "pending" | "verified" | "rejected" | "submitted" | "under_review" | "info_required" | "approved";
   addressLine: string;
   country: string;
   idUploaded: boolean;

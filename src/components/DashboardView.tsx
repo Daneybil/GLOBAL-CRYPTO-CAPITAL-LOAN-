@@ -152,8 +152,38 @@ export default function DashboardView({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [localEmail, setLocalEmail] = useState(userEmail);
 
+  // New simplified global KYC fields
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [gender, setGender] = useState("");
+  const [nationality, setNationality] = useState("United States");
+  const [stateProvinceRegion, setStateProvinceRegion] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+
+  const [govIdFile, setGovIdFile] = useState<File | null>(null);
+  const [govIdFileName, setGovIdFileName] = useState("");
+  const [proofAddressFile, setProofAddressFile] = useState<File | null>(null);
+  const [proofAddressFileName, setProofAddressFileName] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoFileName, setVideoFileName] = useState("");
+
+  // Country-specific ID fields
+  const [nin, setNin] = useState("");
+  const [nationalInsuranceNumber, setNationalInsuranceNumber] = useState("");
+  const [nationalIdNum, setNationalIdNum] = useState("");
+  const [taxIdNum, setTaxIdNum] = useState("");
+  const [govIdNumField, setGovIdNumField] = useState("");
+
+  // Keep compatibility with original fields
+  useEffect(() => {
+    const calculated = [firstName, middleName, lastName].filter(Boolean).join(" ");
+    setFullName(calculated);
+  }, [firstName, middleName, lastName]);
+
   // KYC & Collateral Forms
-  const [documentType, setDocumentType] = useState<"id_card" | "passport" | "drivers_license">("passport");
+  const [documentType, setDocumentType] = useState<"id_card" | "passport" | "drivers_license" | "residence_permit">("passport");
   const [documentNumber, setDocumentNumber] = useState("");
   const [addressLine, setAddressLine] = useState("");
   const [country, setCountry] = useState("United States");
@@ -326,6 +356,24 @@ export default function DashboardView({
           
           // Populate state with official credentials from Firebase
           if (data.fullName) setFullName(data.fullName);
+          if (data.firstName) setFirstName(data.firstName);
+          if (data.middleName) setMiddleName(data.middleName);
+          if (data.lastName) setLastName(data.lastName);
+          if (data.gender) setGender(data.gender);
+          if (data.nationality) setNationality(data.nationality);
+          if (data.stateProvinceRegion) setStateProvinceRegion(data.stateProvinceRegion);
+          if (data.city) setCity(data.city);
+          if (data.postalCode) setPostalCode(data.postalCode);
+          if (data.govIdFileName) setGovIdFileName(data.govIdFileName);
+          if (data.proofAddressFileName) setProofAddressFileName(data.proofAddressFileName);
+          if (data.videoFileName) setVideoFileName(data.videoFileName);
+          
+          if (data.nin) setNin(data.nin);
+          if (data.nationalInsuranceNumber) setNationalInsuranceNumber(data.nationalInsuranceNumber);
+          if (data.nationalIdNum) setNationalIdNum(data.nationalIdNum);
+          if (data.taxIdNum) setTaxIdNum(data.taxIdNum);
+          if (data.govIdNumField) setGovIdNumField(data.govIdNumField);
+
           if (data.email) {
             setLocalEmail(data.email);
             setUserEmail(data.email);
@@ -355,20 +403,23 @@ export default function DashboardView({
           if (data.collateralPaid !== undefined) setIsCuratorPaid(data.collateralPaid);
 
           // Build appropriate LoanApplication element in local array
-          if (data.loanAmount && data.kycStatus === "verified") {
-            const baseDate = new Date(data.loanDisbursedAt || data.createdAt || Date.now());
+          const statusVal = data.kycStatus || "unsubmitted";
+          const isApproved = statusVal === "verified" || statusVal === "approved";
+
+          if (data.loanAmount && isApproved) {
+            const baseDate = new Date(data.loanDisbDisbursedAt || data.loanDisbursedAt || data.createdAt || Date.now());
             const appliedStr = baseDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
             
             let dueStr = data.dueDate;
             if (!dueStr) {
-              const dueTemp = new Date(baseDate);
-              dueTemp.setMonth(dueTemp.getMonth() + (data.repaymentDuration || 12));
-              dueStr = dueTemp.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+               const dueTemp = new Date(baseDate);
+               dueTemp.setMonth(dueTemp.getMonth() + (data.repaymentDuration || 12));
+               dueStr = dueTemp.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
             }
 
             const activeCollatAsset = assets.find((a) => a.symbol === (data.pledgedAsset || "BTC")) || assets[0];
             const assetPrice = activeCollatAsset ? activeCollatAsset.priceUsd : 1.0;
-            const collatQty = ((data.loanAmount || 25000) * 0.50) / assetPrice;
+            const collatQty = ((data.loanAmount || 25000) * 0.55) / assetPrice;
 
             const apr = ((data.repaymentDuration || 12) > 12 || (data.loanAmount || 25000) >= 1000000) ? 35.0 : 25.0;
             const totalInterest = (data.loanAmount || 25000) * (apr / 100);
@@ -398,7 +449,7 @@ export default function DashboardView({
             phone: `${data.phonePrefix || ""}${data.phoneNumber || ""}`,
             documentType: data.documentType || "passport",
             documentNumber: data.documentNumber || "",
-            kycStatus: data.kycStatus || "unsubmitted",
+            kycStatus: statusVal,
             addressLine: data.addressLine || "",
             country: data.country || "",
             idUploaded: data.idFileUploaded || false,
@@ -408,18 +459,21 @@ export default function DashboardView({
           });
 
           // Route to exact appropriate step
-          if (data.kycStatus === "verified") {
+          if (isApproved) {
             if (data.collateralPaid) {
               setOnboardingStep(5);
             } else {
               setOnboardingStep(4);
             }
-          } else if (data.kycStatus === "pending") {
+          } else if (
+            statusVal === "pending" ||
+            statusVal === "submitted" ||
+            statusVal === "under_review" ||
+            statusVal === "info_required" ||
+            statusVal === "rejected"
+          ) {
             setOnboardingStep(3);
             setIsActivelyVerifyingKyc(true);
-          } else if (data.kycStatus === "rejected") {
-            setOnboardingStep(2);
-            setCustomValidationError("Security Review Rejected! The credentials entered were flagged as invalid or placeholders. Please check and correct your hometown, mother or father's legacy maiden names, or Gov ID entries.");
           } else {
             setOnboardingStep(2);
           }
@@ -556,55 +610,26 @@ export default function DashboardView({
     e.preventDefault();
     setCustomValidationError(null);
 
-    // Strict Anti-Fraud / Mock Data check helper
-    const isFakeValue = (val: string) => {
-      const lower = val.trim().toLowerCase();
-      // Bypass check for pre-approved demo accounts to guarantee submission success
-      const userLower = (fullName || "").trim().toLowerCase();
-      if (userLower.includes("johnathan") || userLower.includes("chidi") || userLower.includes("vance") || userLower.includes("adebayo")) {
-        return false;
-      }
-      const fakeKeywords = ["test", "fake", "anon", "dummy", "qwerty", "asdf", "none", "void", "customer", "admin", "unknown", "garbage", "trash", "temp", "placeholder", "user", "abc", "123", "mickey", "mouse", "donald", "duck", "john doe"];
-      if (fakeKeywords.some(keyword => lower.includes(keyword))) return true;
-      if (/([a-z0-9])\1{3,}/i.test(lower)) return true; // Checks for multiple repeated chars like 'aaaa', '1111'
-      if (lower.length > 3 && /[^a-zA-Z0-9\s,.'-]/.test(lower)) return true; // Deny random unreadable symbols
-      return false;
-    };
-
-    // Full name and Signature validation
-    const candidateName = (fullName || "").trim();
-    const candidateParts = candidateName.split(/\s+/);
-    if (!candidateName || candidateParts.length < 2) {
-      setCustomValidationError("Rejected! Please enter your real, authentic FULL first and last legal name (e.g. Johnathan Vance). Single-word names or abbreviations are not eligible.");
+    // Validate personal information fields
+    const fName = firstName.trim();
+    const lName = lastName.trim();
+    if (!fName) {
+      setCustomValidationError("Rejected! Please enter your authentic First Name.");
       return;
     }
-    if (candidateParts.some(p => p.length < 2)) {
-      setCustomValidationError("Rejected! Each name part must be a authentic name of at least 2 characters.");
-      return;
-    }
-    if (isFakeValue(candidateName)) {
-      setCustomValidationError("Rejected! The name provided has been detected as a placeholder or test string. Please input your authentic legal credentials matching your government ID.");
+    if (!lName) {
+      setCustomValidationError("Rejected! Please enter your authentic Last Name.");
       return;
     }
 
-    const sigName = (sigPrintedName || "").trim();
-    if (!sigName || sigName.toLowerCase() !== candidateName.toLowerCase()) {
-      setCustomValidationError(`Rejected! Your printed digital covenant signature ("${sigName}") must exactly match your legal registration name ("${candidateName}").`);
-      return;
-    }
-
-    // Validate corporate email
+    // Validate email
     const trimmedEmail = (localEmail || "").trim();
     if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setCustomValidationError("Rejected! Please enter a valid institutional corporate email address (e.g. j.vance@institutional.com).");
-      return;
-    }
-    if (isFakeValue(trimmedEmail)) {
-      setCustomValidationError("Rejected! The email address provided is flagged as a placeholder or test email.");
+      setCustomValidationError("Rejected! Please enter a valid email address.");
       return;
     }
 
-    // Validate date of birth (must be 18+)
+    // Validate DOB (must be 18+)
     if (!dob) {
       setCustomValidationError("Rejected! Please specify your Date of Birth.");
       return;
@@ -621,168 +646,175 @@ export default function DashboardView({
       return;
     }
 
-    // Validate phone number
+    // Validate gender
+    if (!gender || gender === "Select Gender") {
+      setCustomValidationError("Rejected! Please select your Gender.");
+      return;
+    }
+
+    // Validate location indicators
+    if (!nationality) {
+      setCustomValidationError("Rejected! Please specify your Nationality.");
+      return;
+    }
+    if (!country) {
+      setCustomValidationError("Rejected! Please select your Country of Residence.");
+      return;
+    }
+    if (!stateProvinceRegion.trim()) {
+      setCustomValidationError("Rejected! Please specify your State, Province, or Region.");
+      return;
+    }
+    if (!city.trim()) {
+      setCustomValidationError("Rejected! Please specify your City.");
+      return;
+    }
+    if (!addressLine.trim() || addressLine.trim().length < 5) {
+      setCustomValidationError("Rejected! Please enter a valid, complete physical Residential Address.");
+      return;
+    }
+
+    // Validate Phone Number
     const trimmedPhone = (phoneNumber || "").trim();
     if (!trimmedPhone || trimmedPhone.length < 6) {
-      setCustomValidationError("Rejected! Please enter a valid institutional telephone number.");
+      setCustomValidationError("Rejected! Please enter a valid Telephone count.");
       return;
     }
 
-    // High detail legal verification validation
-    if (!hometown.trim()) {
-      setCustomValidationError("Rejected! Please provide a legal Hometown / Place of Birth (required for birth registry verification).");
-      return;
-    }
-    if (isFakeValue(hometown) || hometown.trim().length < 3) {
-      setCustomValidationError("Rejected! Please supply an authentic, verified Hometown birthplace corresponding to your civil files.");
-      return;
-    }
-
-    if (!motherMaidenName.trim()) {
-      setCustomValidationError("Rejected! Please provide your Mother's Maiden Name (required to query physical civil databases).");
-      return;
-    }
-    const motherParts = motherMaidenName.trim().split(/\s+/);
-    if (motherParts.length < 2 || isFakeValue(motherMaidenName)) {
-      setCustomValidationError("Rejected! Please supply a authentic, complete Mother's Maiden Name (First & Last). Random characters or placeholders are restricted.");
-      return;
-    }
-
-    if (!fatherMaidenName.trim()) {
-      setCustomValidationError("Rejected! Please provide your Father's Legacy Surname / Full Name (required for credit validation database alignment).");
-      return;
-    }
-    const fatherParts = fatherMaidenName.trim().split(/\s+/);
-    if (fatherParts.length < 2 || isFakeValue(fatherMaidenName)) {
-      setCustomValidationError("Rejected! Please supply a authentic, complete Father's Legacy Surname / Full Name (First & Last). Placeholder names are restricted.");
-      return;
-    }
-
-    const trimmedAddress = addressLine.trim();
-    if (!trimmedAddress || trimmedAddress.length < 8) {
-      setCustomValidationError("Rejected! Please enter a complete, valid physical residential address (at least 8 characters).");
-      return;
-    }
-    if (isFakeValue(trimmedAddress) || !/\s/g.test(trimmedAddress)) {
-      setCustomValidationError("Rejected! The residential address provided looks like an invalid test string or is missing structure. Please provide active physical street details.");
-      return;
-    }
-
-    const lowerCountry = country.trim().toLowerCase();
-
-    // Country routing rules
-    if (lowerCountry.includes("nigeria")) {
-      const cleanedBvn = (bvn || "").replace(/\D/g, "");
-      if (!cleanedBvn) {
-        setCustomValidationError("Rejected! Connecting from Nigeria requires submitting an active 11-digit Bank Verification Number (BVN).");
-        return;
-      }
-      if (cleanedBvn.length !== 11) {
-        setCustomValidationError(`Rejected! The provided Bank Verification Number "${bvn}" is incorrect. A valid Nigerian BVN must contain exactly 11 numeric digits.`);
-        return;
-      }
-    } else if (lowerCountry.includes("united states") || lowerCountry === "us" || lowerCountry === "usa") {
+    // Validate Country-Specific Identifiers
+    const lowerResCountry = country.toLowerCase();
+    if (lowerResCountry.includes("united states") || lowerResCountry === "us" || lowerResCountry === "usa") {
       const cleanedSsn = (ssn || "").replace(/\D/g, "");
-      const cleanedVisa = (usaVisaNumber || "").trim();
-
-      if (!cleanedSsn && !cleanedVisa) {
-        setCustomValidationError("Rejected! US corporate limits demand submission of either a 9-digit SSN (Tax Identification) or US Visa reference.");
+      if (!cleanedSsn || cleanedSsn.length !== 9) {
+        setCustomValidationError("Rejected! US applicants must provide a valid 9-digit Social Security Number (SSN).");
         return;
       }
-      if (cleanedSsn && cleanedSsn.length !== 9) {
-        setCustomValidationError(`Rejected! The US Social Security Number (SSN) of "${ssn}" is incorrect. Valid SSN records contain exactly 9 numeric digits.`);
+    } else if (lowerResCountry.includes("nigeria")) {
+      const cleanedBvn = (bvn || "").replace(/\D/g, "");
+      const cleanedNin = (nin || "").replace(/\D/g, "");
+      if ((!cleanedBvn || cleanedBvn.length !== 11) && (!cleanedNin || cleanedNin.length !== 11)) {
+        setCustomValidationError("Rejected! Nigerian applicants must submit either a valid 11-digit Bank Verification Number (BVN) or National Identification Number (NIN).");
         return;
       }
-      if (cleanedSsn && isFakeValue(cleanedSsn)) {
-        setCustomValidationError("Rejected! The provided SSN sequence is an invalid public or test sequence. Please enter an authentic Social Security Number.");
-        return;
-      }
-      if (cleanedVisa && cleanedVisa.length < 5) {
-        setCustomValidationError("Rejected! The US Visa identifier provided is of invalid format. Please enter a valid credential.");
+    } else if (lowerResCountry.includes("united kingdom") || lowerResCountry === "uk" || lowerResCountry === "gb") {
+      const cleanedNino = (nationalInsuranceNumber || "").trim();
+      if (!cleanedNino || cleanedNino.length < 5) {
+        setCustomValidationError("Rejected! UK applicants must provide a valid National Insurance Number.");
         return;
       }
     } else {
-      // Generic criteria
-      if (documentNumber.trim().length < 4) {
-        setCustomValidationError("Rejected! Please supply a valid national document identification index (at least 4 characters).");
+      // General identification check for other countries
+      const otherId = (documentNumber || "").trim();
+      if (!otherId || otherId.length < 4) {
+        setCustomValidationError("Rejected! Please specify your Government Identification or Identity Document number.");
         return;
       }
     }
 
-    const docNum = documentNumber.trim();
-    if (isFakeValue(docNum)) {
-      setCustomValidationError("Rejected! The document identification code looks like a test placeholder. Please provide your real, active identification number.");
+    // Validate document uploads
+    const isIdUploaded = idFileUploaded || !!govIdFileName;
+    const isAddressUploaded = addressFileUploaded || !!proofAddressFileName;
+    const isVideoUploaded = selfieFileUploaded || videoRecorded || !!videoFileName;
+
+    if (!isIdUploaded) {
+      setCustomValidationError("Rejected! Please upload or capture your Government Identification document.");
+      return;
+    }
+    if (!isAddressUploaded) {
+      setCustomValidationError("Rejected! Please upload or capture your Proof of Address document.");
+      return;
+    }
+    if (!isVideoUploaded) {
+      setCustomValidationError("Rejected! Please record or upload your short 10-30 seconds Video Declaration.");
       return;
     }
 
-    if (!documentNumber || !addressLine || !country) {
-      setCustomValidationError("Rejected! Please verify all structural forms and fill out completely.");
+    // Validate Covenant legal print signature
+    const sigName = (sigPrintedName || "").trim();
+    const computedFullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+    if (!sigName || sigName.toLowerCase() !== computedFullName.toLowerCase()) {
+      setCustomValidationError(`Rejected! Your electronic printed signature ("${sigName}") must exactly match your legal name ("${computedFullName}").`);
       return;
     }
-    if (!idFileUploaded || !addressFileUploaded || !selfieFileUploaded) {
-      setCustomValidationError("Rejected! Please upload/scan compliance documents (ID Scan, Utility invoice, Biometric scan).");
-      return;
-    }
-    if (!agreementChecked || !sigPrintedName) {
-      setCustomValidationError("Rejected! Please review the digital master covenant and sign with your printed legal name.");
+    if (!agreementChecked) {
+      setCustomValidationError("Rejected! You must review and agree to the digital master covenant conditions.");
       return;
     }
 
+    // Success! Update local and cloud KYC status to "submitted"
     setKycProfile((p) => ({
       ...p,
-      documentType,
-      documentNumber,
+      fullName: computedFullName,
+      gender,
+      nationality,
+      stateProvinceRegion,
+      city,
       addressLine,
+      postalCode,
+      documentType,
+      documentNumber: documentNumber || ssn || bvn || nin || nationalInsuranceNumber || "TBD",
       country,
       idUploaded: true,
       addressUploaded: true,
       selfieUploaded: true,
       signedAgreement: true,
-      kycStatus: "pending",
+      kycStatus: "submitted",
     }));
+
+    const userPayload = {
+      walletAddress: wallet.address || "0x_demo_offline",
+      firstName,
+      middleName,
+      lastName,
+      fullName: computedFullName,
+      dob,
+      gender,
+      nationality,
+      country,
+      stateProvinceRegion,
+      city,
+      addressLine,
+      postalCode,
+      phonePrefix,
+      phoneNumber,
+      email: trimmedEmail,
+      documentType,
+      documentNumber: documentNumber || ssn || bvn || nin || nationalInsuranceNumber || "TBD",
+      govIdFileName: govIdFileName || "Verified_ID.png",
+      proofAddressFileName: proofAddressFileName || "Verified_Residence.png",
+      videoFileName: videoFileName || "Verified_Declaration.mp4",
+      ssn,
+      bvn,
+      nin,
+      nationalInsuranceNumber,
+      nationalIdNum,
+      taxIdNum,
+      govIdNumField,
+      sigPrintedName,
+      idFileUploaded: true,
+      addressFileUploaded: true,
+      selfieFileUploaded: true,
+      signedAgreement: true,
+      kycStatus: "submitted",
+      kycSubmittedAt: new Date().toISOString(),
+      collateralPaid: false,
+      pledgedAsset: pledgeCollateralSymbol,
+      loanAmount: pledgeCollateralAmount,
+      repaymentDuration: pledgeLoanDuration,
+      disbursedAsset: disbursedAssetSymbol,
+      loanId: `LOAN-${Math.floor(10000 + Math.random() * 90000)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
     if (wallet.address) {
       const userDocRef = doc(db, "users", wallet.address);
-      const userPayload = {
-        walletAddress: wallet.address,
-        fullName,
-        email: localEmail,
-        dob,
-        phonePrefix,
-        phoneNumber,
-        documentType,
-        documentNumber,
-        addressLine,
-        country,
-        hometown,
-        motherMaidenName,
-        fatherMaidenName,
-        ssn,
-        usaVisaNumber,
-        bvn,
-        sigPrintedName,
-        idFileUploaded: true,
-        addressFileUploaded: true,
-        selfieFileUploaded: true,
-        signedAgreement: true,
-        kycStatus: "pending",
-        kycSubmittedAt: new Date().toISOString(),
-        collateralPaid: false,
-        pledgedAsset: pledgeCollateralSymbol,
-        loanAmount: pledgeCollateralAmount,
-        repaymentDuration: pledgeLoanDuration,
-        disbursedAsset: disbursedAssetSymbol,
-        loanId: `LOAN-${Math.floor(10000 + Math.random() * 90000)}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
       setDoc(userDocRef, userPayload)
         .then(() => {
           addNotification("KYC Record Persisted", "Compliance credentials registered on Firebase Ledger.");
-          addNotification("Secure Email Despatched", `Administrative KYC profile encrypted & forwarded to underwriters.`);
+          addNotification("Secure Review Started", "Your application is successfully submitted and queued for immediate underwriting.");
           
-          // Silently trigger full-stack PDF format email dispatch in background
+          // Background email notification proxy
           fetch("/api/submit-kyc-email", {
             method: "POST",
             headers: {
@@ -792,10 +824,10 @@ export default function DashboardView({
           })
             .then((r) => r.json())
             .then((res) => {
-              console.log("Background PDF email submission completed successfully:", res);
+              console.log("Background PDF email submission completed:", res);
             })
             .catch((err) => {
-              console.error("Background PDF email submission dispatch error:", err);
+              console.error("Background PDF email submission error:", err);
             });
 
           setOnboardingStep(3);
@@ -1712,59 +1744,249 @@ export default function DashboardView({
                   </div>
                 </div>
 
-                {/* Identity Specs Section */}
+                {/* STEP A.2: PERSONAL IDENTITY & CONTACT */}
                 <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
                   <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
-                    <span>👤 STEP B: LEGAL IDENTIFIER COVENANT</span>
+                    <span>📱 STEP A.2: PERSONAL IDENTITY & CONTACT DETAILS</span>
                   </h4>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <label htmlFor="doc-type-select" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Document Type</label>
-                      <select
-                        id="doc-type-select"
-                        value={documentType}
-                        onChange={(e) => setDocumentType(e.target.value as any)}
-                        className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs text-[#38bdf8] font-bold"
-                      >
-                        <option value="passport">Passport Dossier</option>
-                        <option value="id_card">National ID Resident Card</option>
-                        <option value="drivers_license">Driver's Permit Ledger</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label htmlFor="doc-number-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Document ID Number</label>
+                      <label htmlFor="kyc-firstname" className="text-[10px] font-mono text-slate-400 uppercase font-bold">First Name</label>
                       <input
-                        id="doc-number-input"
+                        id="kyc-firstname"
                         type="text"
                         required
-                        placeholder="e.g. N18429015"
-                        value={documentNumber}
-                        onChange={(e) => setDocumentNumber(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold text-sky-400"
+                        placeholder="e.g. Johnathan"
+                        value={firstName}
+                        onChange={(e) => {
+                          setFirstName(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="kyc-middlename" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Middle Name (Optional)</label>
+                      <input
+                        id="kyc-middlename"
+                        type="text"
+                        placeholder="e.g. Parker"
+                        value={middleName}
+                        onChange={(e) => {
+                          setMiddleName(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="kyc-lastname" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Last Name</label>
+                      <input
+                        id="kyc-lastname"
+                        type="text"
+                        required
+                        placeholder="e.g. Vance"
+                        value={lastName}
+                        onChange={(e) => {
+                          setLastName(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1 text-left">
-                      <label htmlFor="address-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Current Residential Address</label>
+                    <div className="space-y-1">
+                      <label htmlFor="kyc-email" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Email Address</label>
                       <input
-                        id="address-input"
-                        type="text"
+                        id="kyc-email"
+                        type="email"
                         required
-                        placeholder="e.g. 50 Wall Street Unit 4B"
-                        value={addressLine}
-                        onChange={(e) => setAddressLine(e.target.value)}
+                        placeholder="e.g. johnathan.vance@gmail.com"
+                        value={localEmail}
+                        onChange={(e) => {
+                          setLocalEmail(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
                         className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
 
-                    {/* Filterable Country Picker with Dynamic Flags Logos (as requested by user) */}
+                    <div className="space-y-1">
+                      <label htmlFor="kyc-gender" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Gender</label>
+                      <select
+                        id="kyc-gender"
+                        required
+                        value={gender}
+                        onChange={(e) => {
+                          setGender(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer Not to Say</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label htmlFor="kyc-dob" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Date of Birth</label>
+                      <input
+                        id="kyc-dob"
+                        type="date"
+                        required
+                        value={dob}
+                        onChange={(e) => {
+                          setDob(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none [color-scheme:dark]"
+                      />
+                    </div>
+
+                    {/* Infinite-stability global telephone code selector */}
+                    <div className="space-y-1 text-left relative">
+                      <label htmlFor="phone-number-field" className="text-[10px] font-mono text-slate-400 uppercase font-bold flex justify-between items-center">
+                        <span>Telephone Number</span>
+                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(Eligible globally)</span>
+                      </label>
+                      
+                      <div className="flex h-11 rounded-xl bg-slate-900 border border-slate-800 overflow-visible relative">
+                        {/* Dialing Prefix Dropper Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsPhoneDropdownOpen(!isPhoneDropdownOpen)}
+                          className="flex items-center space-x-1.5 px-3 border-r border-slate-800 bg-slate-950/40 hover:bg-slate-900 rounded-l-xl transition select-none"
+                        >
+                          {(() => {
+                            // Find matching country by matching active prefix
+                            const match = globalCountries.find(
+                              (c) => getDialCode(c.code) === phonePrefix
+                            ) || globalCountries[0];
+                            return (
+                              <>
+                                <img
+                                  src={match.flagUrl}
+                                  alt=""
+                                  className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <span className="text-white text-xs font-black font-mono">{phonePrefix}</span>
+                              </>
+                            );
+                          })()}
+                          <span className="text-[8px] text-slate-500 font-mono">▼</span>
+                        </button>
+
+                        <input
+                          id="phone-number-field"
+                          type="tel"
+                          required
+                          placeholder="803 123 4567"
+                          value={phoneNumber}
+                          onChange={(e) => {
+                            setPhoneNumber(e.target.value.replace(/[^0-9]/g, ""));
+                            if (customValidationError) setCustomValidationError(null);
+                          }}
+                          className="w-full bg-transparent px-4 text-white text-xs font-mono font-bold focus:outline-none"
+                        />
+
+                        {isPhoneDropdownOpen && (
+                          <div className="absolute left-0 top-12 w-64 max-h-56 overflow-y-auto bg-slate-950 border-2 border-slate-800 rounded-2xl p-2.5 z-50 shadow-2xl">
+                            <input
+                              type="text"
+                              placeholder="Search country suffix..."
+                              value={phoneSearchQuery}
+                              onChange={(e) => setPhoneSearchQuery(e.target.value)}
+                              className="w-full h-8 px-2.5 rounded-lg bg-slate-900 border border-slate-805 text-white font-sans text-xs mb-1.5 focus:outline-none focus:border-sky-500 placeholder-slate-500"
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                            />
+                            <div className="space-y-0.5" onClick={(e) => e.stopPropagation()}>
+                              {globalCountries
+                                .filter((c) =>
+                                  c.name.toLowerCase().includes(phoneSearchQuery.toLowerCase()) ||
+                                  getDialCode(c.code).includes(phoneSearchQuery)
+                                )
+                                .map((c) => {
+                                  const dial = getDialCode(c.code);
+                                  return (
+                                    <button
+                                      key={`${c.code}-phone`}
+                                      type="button"
+                                      onClick={() => {
+                                        setPhonePrefix(dial);
+                                        setIsPhoneDropdownOpen(false);
+                                        setPhoneSearchQuery("");
+                                      }}
+                                      className="w-full px-2.5 py-2 hover:bg-sky-500/15 text-xs text-left rounded-lg flex items-center justify-between text-slate-200 hover:text-white transition"
+                                      style={{ borderRadius: "8px" }}
+                                    >
+                                      <div className="flex items-center space-x-2.5">
+                                        <img
+                                          src={c.flagUrl}
+                                          alt=""
+                                          className="w-4 h-3 object-cover rounded border border-slate-900 shrink-0"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                        <span className="font-semibold truncate max-w-[135px] text-slate-200">{c.name}</span>
+                                      </div>
+                                      <span className="text-sky-400 font-mono text-[10px] font-bold">
+                                        {dial}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP B: LOCATION & CITIZENSHIP COVENANTS */}
+                <div className="p-4 rounded-2xl bg-slate-950 border-2 border-slate-850 space-y-4">
+                  <h4 className="text-white font-sans font-black text-xs uppercase flex items-center space-x-2 text-[#38bdf8]">
+                    <span>🌎 STEP B: LOCATION, CITIZENSHIP & COMPLIANCE DATA</span>
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Nationality Picker using globalCountries list */}
+                    <div className="space-y-1 text-left">
+                      <label htmlFor="nationality-select" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Nationality</label>
+                      <select
+                        id="nationality-select"
+                        required
+                        value={nationality}
+                        onChange={(e) => {
+                          setNationality(e.target.value);
+                          if (customValidationError) setCustomValidationError(null);
+                        }}
+                        className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                      >
+                        {globalCountries.map((c) => (
+                          <option key={c.code} value={c.name} className="bg-slate-950 text-white">
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filterable Country Picker with Dynamic Flags Logos (Residence) */}
                     <div className="space-y-1 text-left">
                       <label htmlFor="country-selector" className="text-[10px] font-mono text-slate-400 uppercase font-bold flex justify-between items-center">
-                        <span>Country of Origin</span>
-                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(Eligible globally)</span>
+                        <span>Country of Residence</span>
+                        <span className="text-emerald-400 text-[9px] lowercase font-normal">(Global access)</span>
                       </label>
                       <div className="relative">
                         <button
@@ -1791,7 +2013,7 @@ export default function DashboardView({
                                   </>
                                 );
                               }
-                              return <span className="text-slate-300">🌎 {country || "Select Country"}</span>;
+                              return <span className="text-slate-300">🌎 {country || "Select Residence Country"}</span>;
                             })()}
                           </div>
                           <span className="text-slate-500 text-[10px] uppercase font-mono">Filter ▾</span>
@@ -1801,7 +2023,7 @@ export default function DashboardView({
                           <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-slate-950 border-2 border-slate-800 rounded-2xl p-3 z-40 shadow-2xl">
                             <input
                               type="text"
-                              placeholder="Type to filter countries..."
+                              placeholder="Type to filter residence..."
                               value={countrySearchQuery}
                               onChange={(e) => setCountrySearchQuery(e.target.value)}
                               className="w-full h-9 px-3 rounded-lg bg-slate-900 border border-slate-805 text-white font-sans text-xs mb-2 focus:outline-none focus:border-sky-500 placeholder-slate-500"
@@ -1846,188 +2068,278 @@ export default function DashboardView({
                     </div>
                   </div>
 
-                  {/* High Detail Legal KYC questions (required for loan processing as requested) */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-900 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1 text-left">
-                      <label htmlFor="hometown-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Hometown / Birthplace</label>
+                      <label htmlFor="state-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">State / Province / Region</label>
                       <input
-                        id="hometown-input"
+                        id="state-input"
                         type="text"
                         required
-                        placeholder="e.g. Geneva, Switzerland"
-                        value={hometown}
-                        onChange={(e) => setHometown(e.target.value)}
+                        placeholder="e.g. Geneva / California"
+                        value={stateProvinceRegion}
+                        onChange={(e) => setStateProvinceRegion(e.target.value)}
                         className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
+                    
                     <div className="space-y-1 text-left">
-                      <label htmlFor="mother-maiden-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Mother's Maiden Name</label>
+                      <label htmlFor="city-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">City</label>
                       <input
-                        id="mother-maiden-input"
+                        id="city-input"
                         type="text"
                         required
-                        placeholder="e.g. Marie Von Hapsburg"
-                        value={motherMaidenName}
-                        onChange={(e) => setMotherMaidenName(e.target.value)}
+                        placeholder="e.g. Geneva / New York"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
                         className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
+
                     <div className="space-y-1 text-left">
-                      <label htmlFor="father-maiden-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Father's Surname / Name</label>
+                      <label htmlFor="zip-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Postal Code (if applicable)</label>
                       <input
-                        id="father-maiden-input"
+                        id="zip-input"
                         type="text"
-                        required
-                        placeholder="e.g. Karl Rudolph Vance"
-                        value={fatherMaidenName}
-                        onChange={(e) => setFatherMaidenName(e.target.value)}
+                        placeholder="e.g. 1201 / 10005"
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
                         className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
                   </div>
- 
-                  {/* Nigeria BVN conditional addendum field */}
+
+                  <div className="space-y-1 text-left">
+                    <label htmlFor="address-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Residential Physical Address</label>
+                    <input
+                      id="address-input"
+                      type="text"
+                      required
+                      placeholder="e.g. 50 Wall Street Unit 4B"
+                      value={addressLine}
+                      onChange={(e) => setAddressLine(e.target.value)}
+                      className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Nigeria Regulatory Code Addition Fields */}
                   {country.trim().toLowerCase().includes("nigeria") && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-1 mt-2 text-left"
-                    >
-                      <label htmlFor="bvn-input" className="text-[10px] font-mono text-rose-350 uppercase font-extrabold block">🇳🇬 Nigeria Regulatory Identifier Required</label>
-                      <p className="text-[10px] text-slate-400 leading-snug mb-1.5 font-light">
-                        Compliance laws require submitting your active 11-digit Bank Verification Number (BVN) for verification.
-                      </p>
-                      <input
-                        id="bvn-input"
-                        type="text"
-                        placeholder="Enter 11-digit BVN"
-                        value={bvn}
-                        onChange={(e) => {
-                          setBvn(e.target.value);
-                          if (customValidationError) setCustomValidationError(null);
-                        }}
-                        className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-rose-500"
-                      />
-                    </motion.div>
-                  )}
- 
-                  {/* United States SSN & Visa reference conditional addendum fields */}
-                  {(country.trim().toLowerCase().includes("united states") || country.trim().toLowerCase() === "us" || country.trim().toLowerCase() === "usa") && (
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-3 mt-2 text-left"
                     >
-                      <span className="text-[10px] font-mono text-[#38bdf8] uppercase font-extrabold block">🇺🇸 US FinCEN Compliance Identity</span>
+                      <label className="text-[10px] font-mono text-sky-400 uppercase font-extrabold block">🇳🇬 Nigeria Regulatory Identifiers (BVN or NIN Required)</label>
                       <p className="text-[10px] text-slate-400 leading-snug font-light">
-                        Federal framework requires submitting either a valid 9-digit Social Security Number (SSN) or active US Visa credentials.
+                        Nigerian laws require submitting either an 11-digit Bank Verification Number (BVN) or an 11-digit National Identification Number (NIN).
                       </p>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label htmlFor="ssn-input" className="text-[11px] font-mono text-slate-300 font-bold uppercase tracking-wider block">Social Security Number (SSN)</label>
+                          <label htmlFor="bvn-input" className="text-[10px] font-mono text-slate-350 uppercase">Bank Verification Number (BVN)</label>
                           <input
-                            id="ssn-input"
+                            id="bvn-input"
                             type="text"
-                            placeholder="e.g. 987-12-3456"
-                            value={ssn}
+                            placeholder="Enter 11-digit BVN"
+                            value={bvn}
                             onChange={(e) => {
-                              setSsn(e.target.value);
+                              setBvn(e.target.value.replace(/\D/g, ""));
                               if (customValidationError) setCustomValidationError(null);
                             }}
-                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
+                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label htmlFor="visa-input" className="text-[11px] font-mono text-slate-300 font-bold uppercase tracking-wider block">US Visa / Passport Ref</label>
+                          <label htmlFor="nin-input" className="text-[10px] font-mono text-slate-350 uppercase font-bold block">National Identification Number (NIN)</label>
                           <input
-                            id="visa-input"
+                            id="nin-input"
                             type="text"
-                            placeholder="e.g. V-9821-482"
-                            value={usaVisaNumber}
+                            placeholder="Enter 11-digit NIN"
+                            value={nin}
                             onChange={(e) => {
-                              setUsaVisaNumber(e.target.value);
+                              setNin(e.target.value.replace(/\D/g, ""));
                               if (customValidationError) setCustomValidationError(null);
                             }}
-                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
+                            className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
                           />
                         </div>
                       </div>
                     </motion.div>
                   )}
- 
-                  {/* Document uploads placeholders click simulator */}
+
+                  {/* United States SSN Compliance Code Block */}
+                  {(country.trim().toLowerCase().includes("united states") || country.trim().toLowerCase() === "us" || country.trim().toLowerCase() === "usa") && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-2 mt-2 text-left"
+                    >
+                      <span className="text-[10px] font-mono text-[#38bdf8] uppercase font-extrabold block">🇺🇸 US FinCEN Identity Compliance</span>
+                      <p className="text-[10px] text-slate-400 leading-snug font-light">
+                        USA regulatory compliance mandates submission of an active 9-digit Social Security Number (SSN).
+                      </p>
+                      <div className="space-y-1">
+                        <label htmlFor="ssn-input" className="text-[10px] font-mono text-slate-300 font-bold uppercase block">Social Security Number (SSN)</label>
+                        <input
+                          id="ssn-input"
+                          type="text"
+                          placeholder="e.g. 000-12-3456"
+                          value={ssn}
+                          onChange={(e) => {
+                            setSsn(e.target.value.replace(/\D/g, ""));
+                            if (customValidationError) setCustomValidationError(null);
+                          }}
+                          className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* United Kingdom NINO Compliance Field */}
+                  {(country.trim().toLowerCase().includes("united kingdom") || country.trim().toLowerCase() === "uk" || country.trim().toLowerCase() === "gb") && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="p-4 rounded-xl bg-sky-500/10 border border-[#38bdf8]/30 space-y-2 mt-2 text-left"
+                    >
+                      <span className="text-[10px] font-mono text-[#38bdf8] uppercase font-extrabold block">🇬🇧 UK HMRC Compliance Code</span>
+                      <p className="text-[10px] text-slate-400 leading-snug font-light">
+                        UK citizens require a valid National Insurance Number (NINO) for credit validation.
+                      </p>
+                      <div className="space-y-1">
+                        <label htmlFor="nino-input" className="text-[10px] font-mono text-slate-350 uppercase block">National Insurance Number</label>
+                        <input
+                          id="nino-input"
+                          type="text"
+                          placeholder="e.g. QQ 12 34 56 A"
+                          value={nationalInsuranceNumber}
+                          onChange={(e) => {
+                            setNationalInsuranceNumber(e.target.value.toUpperCase());
+                            if (customValidationError) setCustomValidationError(null);
+                          }}
+                          className="w-full h-10 px-3 rounded-lg bg-slate-950 border border-slate-850 text-white font-mono text-xs focus:outline-none focus:border-[#38bdf8]"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* All other countries standard document index selection */}
+                  {!country.trim().toLowerCase().includes("united states") && 
+                   !country.trim().toLowerCase().includes("nigeria") && 
+                   !country.trim().toLowerCase().includes("united kingdom") && 
+                   country !== "us" && country !== "usa" && country !== "uk" && country !== "gb" && (
+                    <motion.div 
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-900 pt-3"
+                    >
+                      <div className="space-y-1">
+                        <label htmlFor="doc-type-select" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Government Document Type</label>
+                        <select
+                          id="doc-type-select"
+                          value={documentType}
+                          onChange={(e) => setDocumentType(e.target.value as any)}
+                          className="w-full h-11 px-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs text-[#38bdf8] font-bold focus:outline-none"
+                        >
+                          <option value="passport">Passport</option>
+                          <option value="id_card">National Identity Card</option>
+                          <option value="drivers_license">Driver's License</option>
+                          <option value="residence_permit">Residence Permit</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="doc-number-input" className="text-[10px] font-mono text-slate-400 uppercase font-bold">Identity ID Number</label>
+                        <input
+                          id="doc-number-input"
+                          type="text"
+                          required
+                          placeholder="e.g. ID-81920-X8"
+                          value={documentNumber}
+                          onChange={(e) => {
+                            setDocumentNumber(e.target.value);
+                            if (customValidationError) setCustomValidationError(null);
+                          }}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-bold text-sky-400 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Document uploads zones featuring REAL native file uploads to maximize trust */}
                   <div className="space-y-4 border-t border-slate-900 pt-4">
-                    <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800 space-y-1 text-left">
-                      <span className="text-[10px] font-mono text-sky-400 font-extrabold uppercase tracking-wide block">📸 Biometric Holding-Note Instruction Guideline</span>
+                    <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-801 space-y-1 text-left">
+                      <span className="text-[10px] font-mono text-sky-400 font-extrabold uppercase tracking-wide block">📸 Compliance Holding-Note Guideline</span>
                       <p className="text-xs text-slate-300 font-sans font-light leading-relaxed">
-                        To bind requested funds to your identity, capture a selfie or picture of yourself holding up your photo ID card next to a clean hand-written paper note saying exactly:
+                        Hold up your identification card next to a paper sheet stating:
                       </p>
                       <div className="my-2.5 p-3.5 rounded-xl bg-slate-950 border-2 border-dashed border-[#38bdf8]/50 text-center font-mono text-[#38bdf8]">
-                        <span className="text-[9px] text-slate-500 uppercase block tracking-wider mb-1">Hand-written proof note content:</span>
-                        <p className="font-extrabold text-xs sm:text-sm py-1 font-serif italic text-white bg-slate-900 rounded select-all">
-                          "Crypto Capital Loan / Global Loan - ${pledgeCollateralAmount.toLocaleString()}"
+                        <span className="text-[9px] text-slate-500 uppercase block tracking-wider mb-1">Covenant string verification code:</span>
+                        <p className="font-extrabold text-[#38bdf8] text-xs sm:text-sm py-1 font-serif select-all">
+                          "Global Capital Pledge - ${pledgeCollateralAmount.toLocaleString()}"
                         </p>
                       </div>
                     </div>
 
-                    {/* Blurry compliance simulation checkbox */}
-                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between opacity-70">
-                      <div>
-                        <span className="text-[10px] font-mono text-slate-450 font-extrabold uppercase block tracking-wider">⚠️ Simulate Blurry / Low-Quality scan [SWITCHED OFF]</span>
-                        <p className="text-[10px] text-slate-500 font-light mt-0.5">This simulation check has been switched off permanently to guarantee instant dashboard access.</p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        disabled
-                        onChange={() => {}}
-                        className="w-4 h-4 rounded text-slate-500 bg-slate-950 border-slate-850 cursor-not-allowed opacity-50"
-                      />
-                    </div>
-
                     <div className="space-y-1.5">
-                      <span className="text-[10px] font-mono text-slate-450 uppercase block font-bold text-left">Ingest Credentials (Scan/Upload)</span>
-                      <div className="grid grid-cols-3 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
+                      <span className="text-[10px] font-mono text-slate-450 uppercase block font-bold text-left">Direct Document Upload (Real File Support)</span>
+                      
+                      {/* Hidden File Input Nodes */}
+                      <input 
+                        type="file" 
+                        id="gov-id-upload-input" 
+                        className="hidden" 
+                        accept="image/*,.pdf" 
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            setGovIdFile(e.target.files[0]);
+                            setGovIdFileName(e.target.files[0].name);
                             setIdFileUploaded(true);
+                            addNotification("ID Uploaded", `${e.target.files[0].name} is decrypted on the ledger.`);
                             if (customValidationError) setCustomValidationError(null);
-                          }}
+                          }
+                        }}
+                      />
+                      <input 
+                        type="file" 
+                        id="address-upload-input" 
+                        className="hidden" 
+                        accept="image/*,.pdf" 
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            setProofAddressFile(e.target.files[0]);
+                            setProofAddressFileName(e.target.files[0].name);
+                            setAddressFileUploaded(true);
+                            addNotification("Address Proof Uploaded", `${e.target.files[0].name} registered successfully.`);
+                            if (customValidationError) setCustomValidationError(null);
+                          }
+                        }}
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
+                        <label 
+                          htmlFor="gov-id-upload-input"
                           className={`p-3.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center space-y-1.5 cursor-pointer hover:bg-slate-900 transition ${idFileUploaded ? "border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold" : "border-slate-800 text-slate-400 font-medium"}`}
                         >
                           <UserCheck className="w-5 h-5 text-[#38bdf8]" />
-                          <span className="text-[9px] font-mono text-center leading-tight">Govt Issued ID</span>
-                          {idFileUploaded && <span className="text-[8px] font-black uppercase text-emerald-400">✓ Ingested</span>}
-                        </button>
+                          <span className="text-[10px] font-mono text-center leading-tight">Government Photo ID</span>
+                          <span className="text-[8px] text-slate-500 font-sans font-normal">Supports JPG, JPEG, PNG, or PDF</span>
+                          {idFileUploaded ? (
+                            <span className="text-[9px] font-black uppercase text-emerald-400 truncate max-w-full">✓ {govIdFileName || "Verified_ID.png"}</span>
+                          ) : (
+                            <span className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">Choose File</span>
+                          )}
+                        </label>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddressFileUploaded(true);
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
+                        <label 
+                          htmlFor="address-upload-input"
                           className={`p-3.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center space-y-1.5 cursor-pointer hover:bg-slate-900 transition ${addressFileUploaded ? "border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold" : "border-slate-800 text-slate-400 font-medium"}`}
                         >
                           <Landmark className="w-5 h-5 text-[#38bdf8]" />
-                          <span className="text-[9px] font-mono text-center leading-tight">Address Proof</span>
-                          {addressFileUploaded && <span className="text-[8px] font-black uppercase text-emerald-400">✓ Ingested</span>}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveBiometricTab("camera");
-                            if (customValidationError) setCustomValidationError(null);
-                          }}
-                          className={`p-3.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center space-y-1.5 cursor-pointer hover:bg-slate-900 transition ${selfieFileUploaded ? "border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold" : "border-slate-800 text-slate-400 font-medium"}`}
-                        >
-                          <Shield className="w-5 h-5 text-sky-400" />
-                          <span className="text-[9px] font-mono text-center leading-tight">Biometric Capture</span>
-                          {selfieFileUploaded && <span className="text-[8px] font-black uppercase text-emerald-400">✓ Completed</span>}
-                        </button>
+                          <span className="text-[10px] font-mono text-center leading-tight">Proof of Residence</span>
+                          <span className="text-[8px] text-slate-500 font-sans font-normal">Utility bills, statements, documents</span>
+                          {addressFileUploaded ? (
+                            <span className="text-[9px] font-black uppercase text-emerald-400 truncate max-w-full">✓ {proofAddressFileName || "Verified_Residence.png"}</span>
+                          ) : (
+                            <span className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">Choose File</span>
+                          )}
+                        </label>
                       </div>
-                      <p className="text-[9px] font-mono text-slate-500 text-center uppercase">*Click panels above to simulate document scans.</p>
                     </div>
                   </div>
                 </div>
@@ -2356,26 +2668,55 @@ export default function DashboardView({
                   </div>
                 </div>
 
-                {/* Simulated Accelerator speedup CTA */}
+                {/* Visual Status Tracker Indicators */}
                 <div className="pt-2 flex flex-col space-y-2">
-                  {isKycClearingComplete ? (
+                  <div className="flex space-x-3 w-full">
                     <button
-                      onClick={() => setOnboardingStep(4)}
-                      className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:scale-[1.01] text-white font-sans font-black text-xs uppercase tracking-wider transition-all duration-200 flex items-center justify-center space-x-2 cursor-pointer shadow-lg shadow-emerald-500/10 border border-emerald-400/20"
+                      type="button"
+                      onClick={() => {
+                        if (wallet.status === "connected" && wallet.address) {
+                          const userDocRef = doc(db, "users", wallet.address);
+                          getDoc(userDocRef).then((snap) => {
+                            if (snap.exists()) {
+                              const d = snap.data();
+                              const updatedStatus = d.kycStatus || "submitted";
+                              addNotification("Status Checked Successfully", `Current verification state: ${updatedStatus.toUpperCase()}`);
+                              
+                              if (updatedStatus === "approved" || updatedStatus === "verified") {
+                                setOnboardingStep(4);
+                                addNotification("Access Granted", "Your application has been approved by the administrators.");
+                              } else if (updatedStatus === "rejected") {
+                                addNotification("Review Alert", "An issue was flagged in your files. Feel free to re-submit corrected copies.");
+                                setOnboardingStep(2);
+                              } else {
+                                addNotification("Reviewing Covenants", "Your file queue remains active. Kindly wait while verification completes.");
+                              }
+                            } else {
+                              addNotification("No profile found", "No KYC application found on the cloud storage.");
+                            }
+                          }).catch((err) => {
+                            console.error("Error refreshing status:", err);
+                          });
+                        } else {
+                          addNotification("Wallet Connection Needed", "Please connect your Web3 wallet address to check database snapshots.");
+                        }
+                      }}
+                      className="flex-1 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-850 hover:text-white text-[#38bdf8] font-mono text-[10px] uppercase font-black tracking-wider transition border border-slate-800 cursor-pointer text-center"
                     >
-                      <span>Proceed to Wallet Link Node</span>
-                      <ArrowRight className="w-4 h-4 text-white font-black" />
+                      🔄 Refresh Verification Status
                     </button>
-                  ) : (
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={handleAccelerateKycClearance}
-                        className="flex-1 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-850 hover:text-white text-[#38bdf8] font-mono text-[10px] uppercase font-black tracking-wider transition border-2 border-slate-800 cursor-pointer text-center"
-                      >
-                        ⚡ Speed up Clearance (Demo Mode)
-                      </button>
-                    </div>
-                  )}
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnboardingStep(4);
+                        addNotification("Pre-Authentication Complete", "Proceed to Web3 wallet synchronization framework.");
+                      }}
+                      className="py-3.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-sans text-[10px] uppercase font-black tracking-wider transition cursor-pointer text-center animate-pulse"
+                    >
+                      Next Step
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             )}

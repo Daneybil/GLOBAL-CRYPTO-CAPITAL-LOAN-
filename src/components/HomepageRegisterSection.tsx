@@ -194,7 +194,7 @@ export default function HomepageRegisterSection({
                 <span className="w-2 h-2 rounded-full bg-sky-450 animate-pulse shrink-0" />
                 <span className="text-[11px] font-mono text-sky-400 uppercase font-bold">🔒 Secure Identity Ledger Active</span>
               </div>
-              <span className="text-[9.5px] font-mono text-slate-450 uppercase">Network: Mainnet-Simulator</span>
+              <span className="text-[9.5px] font-mono text-slate-450 uppercase">Network: Mainnet Ledger</span>
             </div>
 
             {wallet?.status === "connected" || isLoggedIn ? (
